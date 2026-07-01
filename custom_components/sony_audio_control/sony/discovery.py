@@ -54,24 +54,35 @@ def _humanize(value: str) -> str:
 
 
 def _extract_settings_payload(payload: Any) -> dict[str, Any] | None:
-    """Normalize many known Sony setting response shapes."""
+    """Normalize many known Sony setting response shapes and return the first setting."""
+    payloads = _extract_settings_payloads(payload)
+    return payloads[0] if payloads else None
+
+
+def _extract_settings_payloads(payload: Any) -> list[dict[str, Any]]:
+    """Normalize many known Sony setting response shapes and return all settings.
+
+    Sony devices commonly return settings as result -> [ [ {setting}, ... ] ].
+    A target-specific call returns the same nested shape with a single item.
+    """
     if isinstance(payload, dict):
-        if "settings" in payload and isinstance(payload["settings"], list) and payload["settings"]:
-            first = payload["settings"][0]
-            return first if isinstance(first, dict) else None
-        if "target" in payload or "value" in payload or "candidate" in payload:
-            return payload
-    if isinstance(payload, list) and payload:
+        if "settings" in payload and isinstance(payload["settings"], list):
+            return [item for item in payload["settings"] if isinstance(item, dict)]
+        if "target" in payload or "value" in payload or "currentValue" in payload or "candidate" in payload:
+            return [payload]
+        return []
+    if isinstance(payload, list):
+        out: list[dict[str, Any]] = []
         for item in payload:
-            normal = _extract_settings_payload(item)
-            if normal:
-                return normal
-    return None
+            out.extend(_extract_settings_payloads(item))
+        return out
+    return []
 
 
-def _extract_candidates(setting: dict[str, Any]) -> tuple[list[str], float | None, float | None, float | None]:
+def _extract_candidates(setting: dict[str, Any]) -> tuple[list[str], dict[str, str], float | None, float | None, float | None]:
     candidates = setting.get("candidate") or setting.get("candidates") or []
     option_values: list[str] = []
+    option_map: dict[str, str] = {}
     min_value: float | None = None
     max_value: float | None = None
     step: float | None = None
@@ -79,17 +90,26 @@ def _extract_candidates(setting: dict[str, Any]) -> tuple[list[str], float | Non
     if isinstance(candidates, list):
         for candidate in candidates:
             if isinstance(candidate, dict):
-                value = candidate.get("value") or candidate.get("title")
-                if value is not None:
-                    option_values.append(str(value))
-                if candidate.get("min") is not None:
+                if candidate.get("isAvailable") is False:
+                    continue
+                value = candidate.get("value")
+                title = candidate.get("title") or value
+                if value not in (None, "") and title not in (None, ""):
+                    label = str(title).strip()
+                    raw_value = str(value)
+                    if label not in option_map:
+                        option_values.append(label)
+                    option_map[label] = raw_value
+                if candidate.get("min") is not None and float(candidate["min"]) != -1:
                     min_value = float(candidate["min"])
-                if candidate.get("max") is not None:
+                if candidate.get("max") is not None and float(candidate["max"]) != -1:
                     max_value = float(candidate["max"])
-                if candidate.get("step") is not None:
+                if candidate.get("step") is not None and float(candidate["step"]) != -1:
                     step = float(candidate["step"])
-            elif candidate is not None:
-                option_values.append(str(candidate))
+            elif candidate not in (None, ""):
+                label = str(candidate)
+                option_values.append(label)
+                option_map[label] = label
     elif isinstance(candidates, dict):
         if candidates.get("min") is not None:
             min_value = float(candidates["min"])
@@ -98,22 +118,24 @@ def _extract_candidates(setting: dict[str, Any]) -> tuple[list[str], float | Non
         if candidates.get("step") is not None:
             step = float(candidates["step"])
 
-    return option_values, min_value, max_value, step
-
+    return option_values, option_map, min_value, max_value, step
 
 def _classify_setting(service: str, method: str, target: str, setting: dict[str, Any]) -> SettingDescription:
-    option_values, min_value, max_value, step = _extract_candidates(setting)
-    value = setting.get("value")
+    option_values, option_map, min_value, max_value, step = _extract_candidates(setting)
+    value = setting.get("value", setting.get("currentValue"))
     target_l = target.lower()
+    sony_type = str(setting.get("type") or "").lower()
 
-    if option_values:
-        lower_options = {opt.lower() for opt in option_values}
-        if lower_options <= {"on", "off", "true", "false", "enabled", "disabled"}:
+    if "number" in sony_type or min_value is not None or max_value is not None or "level" in target_l:
+        kind = "number"
+    elif "boolean" in sony_type:
+        kind = "switch"
+    elif "enum" in sony_type or option_values:
+        lower_raw = {v.lower() for v in option_map.values()} or {opt.lower() for opt in option_values}
+        if lower_raw <= {"on", "off", "true", "false", "enabled", "disabled"}:
             kind = "switch"
         else:
             kind = "select"
-    elif min_value is not None or max_value is not None or "level" in target_l or "volume" in target_l:
-        kind = "number"
     elif isinstance(value, bool) or target_l.endswith("mode") and str(value).lower() in {"on", "off"}:
         kind = "switch"
     else:
@@ -140,6 +162,7 @@ def _classify_setting(service: str, method: str, target: str, setting: dict[str,
         set_method=set_method,
         target=target,
         option_values=option_values,
+        option_map=option_map,
         min_value=min_value,
         max_value=max_value,
         step=step,
@@ -189,12 +212,36 @@ async def discover_settings(client: SonyAudioClient) -> tuple[dict[str, Any], li
         descriptions[desc.key] = desc
 
     if not methods or ("audio", "getSpeakerSettings") in methods:
-        for target in SPEAKER_TARGET_PROBES:
-            await probe("audio", "getSpeakerSettings", target)
+        payload = await client.try_call("audio", "getSpeakerSettings", [{}])
+        settings = _extract_settings_payloads(payload)
+        if settings:
+            for setting in settings:
+                if not setting.get("isAvailable", True):
+                    continue
+                target = setting.get("target")
+                if not target:
+                    continue
+                desc = _classify_setting("audio", "getSpeakerSettings", str(target), setting)
+                descriptions[desc.key] = desc
+        else:
+            for target in SPEAKER_TARGET_PROBES:
+                await probe("audio", "getSpeakerSettings", target)
 
     if not methods or ("audio", "getSoundSettings") in methods:
-        for target in SOUND_TARGET_PROBES + SENSOR_TARGET_PROBES:
-            await probe("audio", "getSoundSettings", target)
+        payload = await client.try_call("audio", "getSoundSettings", [{}], version="1.1")
+        settings = _extract_settings_payloads(payload)
+        if settings:
+            for setting in settings:
+                if not setting.get("isAvailable", True):
+                    continue
+                target = setting.get("target")
+                if not target:
+                    continue
+                desc = _classify_setting("audio", "getSoundSettings", str(target), setting)
+                descriptions[desc.key] = desc
+        else:
+            for target in SOUND_TARGET_PROBES + SENSOR_TARGET_PROBES:
+                await probe("audio", "getSoundSettings", target)
 
     # Core entities that are handled explicitly by platforms.
     if not methods or ("system", "getPowerStatus") in methods or ("audio", "getVolumeInformation") in methods:

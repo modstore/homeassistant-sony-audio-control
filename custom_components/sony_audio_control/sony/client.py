@@ -66,43 +66,63 @@ class SonyAudioClient:
             return None
 
     async def supported_api_info(self) -> dict[str, Any]:
-        """Return supported service/method information."""
-        result = await self.call("guide", "getSupportedApiInfo", [])
-        if isinstance(result, dict):
-            return result
-        return {"services": result or []}
+        """Return supported service/method information.
+
+        Some Sony audio devices return ``Illegal Argument`` for the usual
+        guide/getSupportedApiInfo call shape even though the device supports
+        the audio APIs directly. Treat guide discovery as optional so setup can
+        continue and the integration can probe known safe audio endpoints.
+        """
+        for params in ([{}], [], [{"services": []}]):
+            data = await self.try_call("guide", "getSupportedApiInfo", params)
+            if data is None:
+                continue
+            if isinstance(data, dict):
+                return data
+            return {"services": data or []}
+        _LOGGER.debug("guide/getSupportedApiInfo unavailable; continuing with probe-based discovery")
+        return {"services": []}
 
     async def system_information(self) -> dict[str, Any]:
         """Return system information where supported."""
-        data = await self.try_call("system", "getSystemInformation")
-        return data if isinstance(data, dict) else {}
+        for version in ("1.4", "1.3", "1.0"):
+            data = await self.try_call("system", "getSystemInformation", [], version=version)
+            if isinstance(data, dict):
+                return data
+        return {}
 
     async def power_status(self) -> dict[str, Any]:
-        data = await self.try_call("system", "getPowerStatus")
-        return data if isinstance(data, dict) else {}
+        for version in ("1.1", "1.0"):
+            data = await self.try_call("system", "getPowerStatus", [], version=version)
+            if isinstance(data, dict):
+                return data
+        return {}
 
     async def set_power(self, active: bool) -> None:
-        await self.call("system", "setPowerStatus", [{"status": "active" if active else "standby"}])
+        await self.call("system", "setPowerStatus", [{"status": "active" if active else "standby"}], version="1.1")
 
     async def volume_information(self) -> list[dict[str, Any]]:
-        data = await self.try_call("audio", "getVolumeInformation")
-        if isinstance(data, list):
-            return [item for item in data if isinstance(item, dict)]
-        if isinstance(data, dict):
-            return [data]
+        # Receivers differ on the accepted params shape. Try the self-describing
+        # empty-object call first; STR-DN1080 returns Illegal Argument for [] here.
+        for params, version in (([{}], "1.1"), ([{"target": "speaker"}], "1.1"), ([], "1.1"), ([{}], "1.0")):
+            data = await self.try_call("audio", "getVolumeInformation", params, version=version)
+            if isinstance(data, list):
+                return [item for item in data if isinstance(item, dict)]
+            if isinstance(data, dict):
+                return [data]
         return []
 
     async def set_volume(self, volume: int, *, target: str = "speaker") -> None:
-        await self.call("audio", "setAudioVolume", [{"target": target, "volume": str(volume), "ui": "on"}])
+        await self.call("audio", "setAudioVolume", [{"target": target, "volume": str(volume), "ui": "on"}], version="1.1")
 
     async def set_mute(self, mute: bool, *, target: str = "speaker") -> None:
-        await self.call("audio", "setAudioMute", [{"target": target, "status": mute}])
+        await self.call("audio", "setAudioMute", [{"target": target, "status": mute}], version="1.1")
 
     async def get_sound_setting(self, target: str) -> Any:
-        return await self.call("audio", "getSoundSettings", [{"target": target}])
+        return await self.call("audio", "getSoundSettings", [{"target": target}], version="1.1")
 
     async def set_sound_setting(self, target: str, value: str) -> None:
-        await self.call("audio", "setSoundSettings", [{"settings": [{"target": target, "value": value}]}])
+        await self.call("audio", "setSoundSettings", [{"settings": [{"target": target, "value": value}]}], version="1.1")
 
     async def get_speaker_setting(self, target: str) -> Any:
         return await self.call("audio", "getSpeakerSettings", [{"target": target}])
@@ -126,7 +146,7 @@ class SonyAudioClient:
     async def dump_device_info(self, discovered_targets: list[str] | None = None) -> dict[str, Any]:
         """Best-effort device dump for diagnostics and issue reports."""
         dump: dict[str, Any] = {
-            "supported_api_info": await self.try_call("guide", "getSupportedApiInfo"),
+            "supported_api_info": await self.supported_api_info(),
             "system_information": await self.try_call("system", "getSystemInformation"),
             "power_status": await self.try_call("system", "getPowerStatus"),
             "volume_information": await self.try_call("audio", "getVolumeInformation"),

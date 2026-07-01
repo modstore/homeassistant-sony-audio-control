@@ -89,7 +89,7 @@ def _extract_value(payload: Any) -> Any:
     if isinstance(payload, dict):
         if "settings" in payload and isinstance(payload["settings"], list) and payload["settings"]:
             return _extract_value(payload["settings"][0])
-        return payload.get("value")
+        return payload.get("currentValue", payload.get("value"))
     if isinstance(payload, list):
         for item in payload:
             value = _extract_value(item)

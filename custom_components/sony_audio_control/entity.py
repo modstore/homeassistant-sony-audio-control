@@ -28,10 +28,15 @@ class SonyAudioEntity(CoordinatorEntity[SonyAudioCoordinator]):
         data = self.coordinator.data
         name = data.device_name if data else None
         model = data.model_name if data else None
+        system_info = data.system_info if data else {}
+        serial = system_info.get("serial") or system_info.get("serialNumber") or system_info.get("macAddr")
+        version = system_info.get("version")
+        identifiers = {(DOMAIN, str(serial or self.coordinator.client.host))}
         return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.client.host)},
-            name=name or "Sony Audio Device",
+            identifiers=identifiers,
+            name=name or model or "Sony Audio Device",
             manufacturer="Sony",
             model=model,
+            sw_version=version,
             configuration_url=f"http://{self.coordinator.client.host}:{self.coordinator.client.port}",
         )

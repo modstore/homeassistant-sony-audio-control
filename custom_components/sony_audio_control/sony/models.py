@@ -19,6 +19,7 @@ class SettingDescription:
     set_method: str | None = None
     target: str | None = None
     option_values: list[str] = field(default_factory=list)
+    option_map: dict[str, str] = field(default_factory=dict)
     min_value: float | None = None
     max_value: float | None = None
     step: float | None = None

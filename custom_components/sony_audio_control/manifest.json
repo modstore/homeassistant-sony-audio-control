@@ -1,13 +1,17 @@
 {
   "domain": "sony_audio_control",
   "name": "Sony Audio Control",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "config_flow": true,
   "documentation": "https://github.com/modstore/homeassistant-sony-audio-control",
   "issue_tracker": "https://github.com/modstore/homeassistant-sony-audio-control/issues",
-  "codeowners": ["@modstore"],
+  "codeowners": [
+    "@modstore"
+  ],
   "iot_class": "local_polling",
   "integration_type": "device",
   "requirements": [],
-  "loggers": ["custom_components.sony_audio_control"]
+  "loggers": [
+    "custom_components.sony_audio_control"
+  ]
 }

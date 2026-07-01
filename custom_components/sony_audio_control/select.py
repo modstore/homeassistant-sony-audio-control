@@ -28,13 +28,20 @@ class SonyAudioSelect(SonyAudioEntity, SelectEntity):
         if not data or not self.description.target:
             return None
         value = data.sound_settings.get(self.description.target, data.speaker_settings.get(self.description.target))
-        return str(value) if value is not None else None
+        if value is None:
+            return None
+        raw = str(value)
+        for label, raw_value in self.description.option_map.items():
+            if raw_value == raw:
+                return label
+        return raw if raw in self.description.option_values else None
 
     async def async_select_option(self, option: str) -> None:
         if not self.description.target or not self.description.set_method:
             return
+        value = self.description.option_map.get(option, option)
         if self.description.set_method == "setSpeakerSettings":
-            await self.coordinator.client.set_speaker_setting(self.description.target, option)
+            await self.coordinator.client.set_speaker_setting(self.description.target, value)
         elif self.description.set_method == "setSoundSettings":
-            await self.coordinator.client.set_sound_setting(self.description.target, option)
+            await self.coordinator.client.set_sound_setting(self.description.target, value)
         await self.coordinator.async_request_refresh()

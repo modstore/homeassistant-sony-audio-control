@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any
+import logging
 
 import voluptuous as vol
 
@@ -11,6 +12,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import CONF_HOST, CONF_PORT, DEFAULT_PORT, DOMAIN
 from .sony.client import SonyAudioClient
 from .sony.exceptions import SonyAudioConnectionError, SonyAudioError
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class SonyAudioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -29,13 +32,26 @@ class SonyAudioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             session = async_get_clientsession(self.hass)
             client = SonyAudioClient(session, host, port)
             try:
+                # Some Sony audio devices do not expose every discovery endpoint
+                # consistently, so validate with a best-effort sequence.
                 info = await client.system_information()
                 if not info:
                     await client.supported_api_info()
             except SonyAudioConnectionError:
                 errors["base"] = "cannot_connect"
-            except SonyAudioError:
-                errors["base"] = "unknown"
+            except SonyAudioError as err:
+                _LOGGER.debug("Sony Audio validation returned API error, falling back to audio probe: %s", err)
+                try:
+                    await client.get_speaker_setting("subwooferLevel")
+                except Exception as fallback_err:  # noqa: BLE001 - keep config flow user-friendly
+                    _LOGGER.exception("Sony Audio fallback validation failed")
+                    errors["base"] = "cannot_connect"
+                else:
+                    title = f"Sony Audio {host}"
+                    return self.async_create_entry(title=title, data={CONF_HOST: host, CONF_PORT: port})
+            except Exception:  # noqa: BLE001 - avoid generic UI "Unexpected error" during setup
+                _LOGGER.exception("Unexpected error while validating Sony Audio device")
+                errors["base"] = "cannot_connect"
             else:
                 title = info.get("productName") or info.get("modelName") or f"Sony Audio {host}"
                 return self.async_create_entry(title=title, data={CONF_HOST: host, CONF_PORT: port})
