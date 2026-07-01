@@ -60,7 +60,12 @@ class SonyAudioCoordinator(DataUpdateCoordinator[DeviceSnapshot]):
                 if speaker_volume.get("maxVolume") is not None:
                     snap.max_volume = int(float(speaker_volume["maxVolume"]))
                 if speaker_volume.get("mute") is not None:
-                    snap.mute = bool(speaker_volume["mute"])
+                    mute = speaker_volume["mute"]
+
+                    if isinstance(mute, str):
+                        snap.mute = mute.lower() == "on"
+                    else:
+                        snap.mute = bool(mute)
 
             current_source = next((s for s in sources if s.get("active") or s.get("status") == "active"), sources[0] if sources else {})
             snap.input_uri = current_source.get("uri") or playing_info.get("uri")

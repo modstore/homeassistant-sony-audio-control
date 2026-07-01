@@ -116,7 +116,7 @@ class SonyAudioClient:
         await self.call("audio", "setAudioVolume", [{"target": target, "volume": str(volume), "ui": "on"}], version="1.1")
 
     async def set_mute(self, mute: bool, *, target: str = "speaker") -> None:
-        await self.call("audio", "setAudioMute", [{"target": target, "status": mute}], version="1.1")
+        await self.call("audio", "setAudioMute", [{"mute": "on" if mute else "off"}], version="1.1")
 
     async def get_sound_setting(self, target: str) -> Any:
         return await self.call("audio", "getSoundSettings", [{"target": target}], version="1.1")
