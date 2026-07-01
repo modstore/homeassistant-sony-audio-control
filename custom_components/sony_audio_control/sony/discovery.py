@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from ..const import SUBWOOFER_LEVEL_TARGET, SUBWOOFER_MANUAL_PRESET, SUBWOOFER_PRESET_KEY, SUBWOOFER_PRESETS
 from .client import SonyAudioClient
 from .models import SettingDescription
 
@@ -226,6 +227,21 @@ async def discover_settings(client: SonyAudioClient) -> tuple[dict[str, Any], li
         else:
             for target in SPEAKER_TARGET_PROBES:
                 await probe("audio", "getSpeakerSettings", target)
+
+    if any(desc.target == SUBWOOFER_LEVEL_TARGET and desc.kind == "number" for desc in descriptions.values()):
+        descriptions[SUBWOOFER_PRESET_KEY] = SettingDescription(
+            key=SUBWOOFER_PRESET_KEY,
+            name="Subwoofer Preset",
+            kind="select",
+            service="audio",
+            get_method="getSpeakerSettings",
+            set_method="setSpeakerSettings",
+            target=SUBWOOFER_LEVEL_TARGET,
+            option_values=list(SUBWOOFER_PRESETS) + [SUBWOOFER_MANUAL_PRESET],
+            option_map={label: str(value) for label, value in SUBWOOFER_PRESETS.items()},
+            icon="mdi:speaker",
+            raw={"preset_for": SUBWOOFER_LEVEL_TARGET},
+        )
 
     if not methods or ("audio", "getSoundSettings") in methods:
         payload = await client.try_call("audio", "getSoundSettings", [{}], version="1.1")
