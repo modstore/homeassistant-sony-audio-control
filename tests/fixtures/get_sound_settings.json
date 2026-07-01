@@ -1,0 +1,40 @@
+[
+  [
+    {
+      "candidate": [
+        {"isAvailable": true, "title": "2ch Stereo", "value": "2chStereo"},
+        {"isAvailable": true, "title": "Multi Ch Stereo", "value": "multiChStereo"},
+        {"isAvailable": true, "title": "Direct", "value": "direct"},
+        {"isAvailable": false, "title": "", "value": "off"}
+      ],
+      "currentValue": "multiChStereo",
+      "isAvailable": true,
+      "target": "soundField",
+      "title": "Sound Field",
+      "type": "enumTarget"
+    },
+    {
+      "candidate": [
+        {"isAvailable": true, "title": "On", "value": "on"},
+        {"isAvailable": true, "title": "Off", "value": "off"}
+      ],
+      "currentValue": "off",
+      "isAvailable": true,
+      "target": "pureDirect",
+      "title": "Pure Direct",
+      "type": "booleanTarget"
+    },
+    {
+      "candidate": [
+        {"isAvailable": true, "title": "Off", "value": "off"},
+        {"isAvailable": true, "title": "Normal", "value": "normal"},
+        {"isAvailable": true, "title": "Low", "value": "low"}
+      ],
+      "currentValue": "off",
+      "isAvailable": true,
+      "target": "optimizer",
+      "title": "Sound Optimizer",
+      "type": "enumTarget"
+    }
+  ]
+]

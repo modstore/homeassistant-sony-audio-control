@@ -1,0 +1,41 @@
+[
+  {
+    "service": "audio",
+    "apis": [
+      {"name": "getSoundSettings", "versions": [{"version": "1.1"}]},
+      {"name": "getSpeakerSettings", "versions": [{"version": "1.0"}]},
+      {"name": "getVolumeInformation", "versions": [{"version": "1.1"}]},
+      {"name": "setAudioMute", "versions": [{"version": "1.1"}]},
+      {"name": "setAudioVolume", "versions": [{"version": "1.1"}]},
+      {"name": "setSoundSettings", "versions": [{"version": "1.1"}]},
+      {"name": "setSpeakerSettings", "versions": [{"version": "1.0"}]}
+    ],
+    "protocols": ["xhrpost:jsonizer", "websocket:jsonizer"]
+  },
+  {
+    "service": "avContent",
+    "apis": [
+      {"name": "getCurrentExternalTerminalsStatus", "versions": [{"version": "1.0"}]},
+      {"name": "getPlayingContentInfo", "versions": [{"version": "1.2"}]},
+      {"name": "getSourceList", "versions": [{"version": "1.2"}]},
+      {"name": "setPlayContent", "versions": [{"version": "1.2"}]}
+    ],
+    "protocols": ["xhrpost:jsonizer", "websocket:jsonizer"]
+  },
+  {
+    "service": "guide",
+    "apis": [
+      {"name": "getSupportedApiInfo", "versions": [{"version": "1.0"}]}
+    ],
+    "protocols": ["xhrpost:jsonizer"]
+  },
+  {
+    "service": "system",
+    "apis": [
+      {"name": "getPowerStatus", "versions": [{"version": "1.1"}]},
+      {"name": "getSystemInformation", "versions": [{"version": "1.4"}]},
+      {"name": "setPowerStatus", "versions": [{"version": "1.1"}]}
+    ],
+    "protocols": ["xhrpost:jsonizer", "websocket:jsonizer"]
+  }
+]

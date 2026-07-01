@@ -1,0 +1,48 @@
+[
+  [
+    {
+      "candidate": [
+        {"isAvailable": true, "title": "Speaker A", "value": "speakerA"},
+        {"isAvailable": false, "title": "Speaker B", "value": "speakerB"},
+        {"isAvailable": true, "title": "Off", "value": "off"}
+      ],
+      "currentValue": "speakerA",
+      "isAvailable": true,
+      "target": "speakerSelection",
+      "title": "Speakers",
+      "type": "enumTarget"
+    },
+    {
+      "candidate": [{"isAvailable": true, "max": 10, "min": -10, "step": 0.5, "title": "Front L", "value": "0.5"}],
+      "currentValue": "0.5",
+      "isAvailable": true,
+      "target": "frontLLevel",
+      "title": "Front L",
+      "type": "doubleNumberTarget"
+    },
+    {
+      "candidate": [{"isAvailable": true, "max": 10, "min": -10, "step": 0.5, "title": "Center", "value": "5.0"}],
+      "currentValue": "5.0",
+      "isAvailable": true,
+      "target": "centerLevel",
+      "title": "Center",
+      "type": "doubleNumberTarget"
+    },
+    {
+      "candidate": [{"isAvailable": true, "max": 10, "min": -10, "step": 0.5, "title": "Height L", "value": "-6.0"}],
+      "currentValue": "-6.0",
+      "isAvailable": false,
+      "target": "heightLLevel",
+      "title": "Height L",
+      "type": "doubleNumberTarget"
+    },
+    {
+      "candidate": [{"isAvailable": true, "max": 10, "min": -10, "step": 0.5, "title": "Subwoofer", "value": "0.0"}],
+      "currentValue": "0.0",
+      "isAvailable": true,
+      "target": "subwooferLevel",
+      "title": "Subwoofer",
+      "type": "doubleNumberTarget"
+    }
+  ]
+]
