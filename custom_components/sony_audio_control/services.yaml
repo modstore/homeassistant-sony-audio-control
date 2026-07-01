@@ -1,0 +1,27 @@
+call_method:
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    service:
+      required: true
+      example: audio
+      selector:
+        text:
+    method:
+      required: true
+      example: getSpeakerSettings
+      selector:
+        text:
+    params:
+      required: false
+      example:
+        - target: subwooferLevel
+      selector:
+        object:
+    version:
+      required: false
+      default: "1.0"
+      selector:
+        text:

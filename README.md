@@ -1,115 +1,77 @@
-# Home Assistant Sony Audio Control
+# Sony Audio Control for Home Assistant
 
-A HACS-ready custom integration for controlling Sony receivers/amplifiers that expose Sony's local REST/JSON-RPC style API, such as the Sony STR-DN1080.
+A HACS-ready custom integration for Sony receivers, amplifiers, soundbars, and speakers that expose Sony's local ScalarWebAPI / SongPal-style REST API.
 
-This project is intentionally not tied to one model. It starts with a generic Sony API client and exposes useful Home Assistant entities where the device responds successfully.
+This project started with a Sony STR-DN1080, but the integration is intentionally **not model locked**. It discovers supported API methods and probes known setting targets so it can expose only the entities your device actually supports.
 
-## Current status
-
-Early scaffold / alpha.
-
-Implemented so far:
+## Features
 
 - UI config flow
-- Host/IP configuration
-- Optional port configuration, default `10000`
-- Local polling API client
-- Media player entity
-  - Power on/off
-  - Volume set
-  - Mute
-  - Source selection from discovered external inputs, where supported
-- Number entities for common speaker level targets
-  - Subwoofer level
-  - Front left/right
-  - Centre
-  - Surround left/right
-  - Surround back left/right
-  - Height left/right
-- Select entities for common sound settings
-  - Sound field
-  - Speaker pattern
-- Sensors for power and playing content
-- Mute switch
+- Local polling, no cloud account required
+- Configurable host and port, default port `10000`
+- Media player entity for power, volume, mute and inputs where available
+- Dynamic number entities for speaker/sound levels, including subwoofer level
+- Dynamic select entities for supported sound/input/playback settings
+- Sensors for model, API support, power status, inputs and active settings
+- Switches for mute and supported boolean settings
+- Service to call any raw Sony API method for testing new devices
 
-## Tested proof-of-concept
+## Installation for testing
 
-The STR-DN1080 responds to calls like:
-
-```bash
-curl -i -d '{ "method": "getSpeakerSettings", "id": 62, "params": [{"target": "subwooferLevel"}], "version": "1.0" }' \
-  http://192.168.1.14:10000/sony/audio
-```
-
-And setting a value:
-
-```bash
-curl -i -d '{ "method": "setSpeakerSettings", "id": 62, "params": [{"settings": [{ "value": "0", "target": "subwooferLevel" }]}], "version": "1.0" }' \
-  http://192.168.1.14:10000/sony/audio
-```
-
-## Installation via HACS custom repository
-
-1. Upload this repository to GitHub as `homeassistant-sony-audio-control`.
-2. In Home Assistant, open HACS.
-3. Add a custom repository.
-4. Use your GitHub repo URL.
-5. Select category: `Integration`.
-6. Install the integration.
-7. Restart Home Assistant.
-8. Go to **Settings → Devices & services → Add integration**.
-9. Search for **Sony Audio Control**.
-10. Enter the receiver/amplifier IP address and port.
-
-## Manual installation
-
-Copy this folder:
-
-```text
-custom_components/sony_audio_control
-```
-
-Into your Home Assistant config directory:
+Copy this folder into Home Assistant:
 
 ```text
 /config/custom_components/sony_audio_control
 ```
 
-Restart Home Assistant, then add the integration through the UI.
+Restart Home Assistant, then add the integration from:
 
-## Configuration
+```text
+Settings → Devices & services → Add integration → Sony Audio Control
+```
 
-| Option | Required | Default | Example |
-| --- | --- | --- | --- |
-| Host/IP address | Yes | — | `192.168.1.14` |
-| Port | No | `10000` | `10000` |
+Use your receiver/amplifier IP address and port `10000` unless your device uses a different port.
 
-## Notes
+## HACS installation
 
-On Sony receivers, local/network control may need to be enabled in the device settings. The option name varies by model, but it is often something like **Network Standby**, **Remote Start**, **External Control**, or **Control for HDMI/network**.
+Once this is pushed to GitHub:
+
+1. HACS → Custom repositories
+2. Add your repository URL
+3. Category: Integration
+4. Install **Sony Audio Control**
+5. Restart Home Assistant
+6. Add the integration from Devices & services
 
 ## Development notes
 
-The API client is intentionally generic:
+The integration first calls `/sony/guide` with `getSupportedApiInfo`. Then it probes supported methods/settings. This allows newer or different Sony devices to work without adding model-specific files.
 
-```python
-await api.call("audio", "getSpeakerSettings", [{"target": "subwooferLevel"}], "1.0")
+For STR-DN1080 testing, the known working proof-of-concept commands were:
+
+```bash
+curl -i -d '{ "method": "setSpeakerSettings", "id": 62, "params": [{"settings": [{ "value": "0", "target": "subwooferLevel" }]}], "version": "1.0"}' http://192.168.1.14:10000/sony/audio
+
+curl -i -d '{ "method": "getSpeakerSettings", "id": 62, "params": [{"target": "subwooferLevel"}], "version": "1.0"}' http://192.168.1.14:10000/sony/audio
 ```
 
-Future improvements:
+## Raw API service
 
-- Better dynamic entity discovery from `getSupportedApiInfo`
-- More complete STR-DN1080 target list
-- Custom services for arbitrary Sony API calls
-- Speaker distance entities
-- EQ/band level entities
-- Input icons and cleaner source names
-- Diagnostics support
-- Repairs/issues for failed optional targets
+This integration registers a service for experimenting with new devices/settings:
 
-## Repository checklist before publishing
+```yaml
+service: sony_audio_control.call_method
+data:
+  entry_id: YOUR_CONFIG_ENTRY_ID
+  service: audio
+  method: getSpeakerSettings
+  params:
+    - target: subwooferLevel
+  version: "1.0"
+```
 
-- Replace `@your-github-username` in `manifest.json`.
-- Replace the documentation and issue tracker URLs in `manifest.json`.
-- Add a real icon at `brands/sony_audio_control/icon.png` if submitting to default HACS.
-- Create a GitHub release such as `v0.1.0`.
+The response is written to the Home Assistant log.
+
+## Status
+
+Early development scaffold. Expect first-device testing and fixes.

@@ -1,34 +1,48 @@
-"""Async client for Sony ScalarWebAPI / SongPal-compatible audio devices."""
 from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 import aiohttp
 
+from .const import REQUEST_TIMEOUT
+
 _LOGGER = logging.getLogger(__name__)
 
+
 class SonyAudioApiError(Exception):
-    """Raised when the Sony device returns or causes an API error."""
+    """Base API error."""
+
+
+class SonyAudioApiConnectionError(SonyAudioApiError):
+    """Connection error."""
+
+
+class SonyAudioApiResponseError(SonyAudioApiError):
+    """Unexpected or error response."""
+
+
+@dataclass(frozen=True)
+class SonyApiMethod:
+    service: str
+    name: str
+    versions: tuple[str, ...]
+
 
 class SonyAudioApi:
-    """Small JSON-RPC style client for Sony audio devices."""
+    """Small async client for Sony ScalarWebAPI/SongPal-style devices."""
 
-    def __init__(self, host: str, port: int, session: aiohttp.ClientSession | None = None) -> None:
+    def __init__(self, session: aiohttp.ClientSession, host: str, port: int) -> None:
+        self.session = session
         self.host = host
         self.port = port
-        self._session = session or aiohttp.ClientSession()
-        self._own_session = session is None
-        self._id = 1
+        self._request_id = 1
 
     @property
     def base_url(self) -> str:
         return f"http://{self.host}:{self.port}/sony"
-
-    async def close(self) -> None:
-        if self._own_session:
-            await self._session.close()
 
     async def call(
         self,
@@ -37,90 +51,129 @@ class SonyAudioApi:
         params: list[Any] | None = None,
         version: str = "1.0",
     ) -> Any:
-        """Call a Sony service method."""
-        self._id += 1
-        payload = {
+        """Call a Sony API method and return the raw result payload."""
+        self._request_id += 1
+        payload: dict[str, Any] = {
             "method": method,
-            "id": self._id,
+            "id": self._request_id,
             "params": params or [],
             "version": version,
         }
         url = f"{self.base_url}/{service}"
         try:
-            async with self._session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=8)) as resp:
-                text = await resp.text()
-                if resp.status >= 400:
-                    raise SonyAudioApiError(f"HTTP {resp.status}: {text}")
-                data = await resp.json(content_type=None)
-        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-            raise SonyAudioApiError(f"Unable to connect to Sony device: {err}") from err
+            async with self.session.post(
+                url,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
+            ) as response:
+                text = await response.text()
+                if response.status >= 400:
+                    raise SonyAudioApiResponseError(
+                        f"HTTP {response.status} calling {service}.{method}: {text}"
+                    )
+                data = await response.json(content_type=None)
+        except asyncio.TimeoutError as err:
+            raise SonyAudioApiConnectionError(f"Timeout calling {url}") from err
+        except aiohttp.ClientError as err:
+            raise SonyAudioApiConnectionError(f"Error calling {url}: {err}") from err
 
         if "error" in data:
-            raise SonyAudioApiError(f"Sony API error from {method}: {data['error']}")
+            raise SonyAudioApiResponseError(f"Sony API error for {service}.{method}: {data['error']}")
         return data.get("result")
 
-    async def test_connection(self) -> None:
-        """Validate that the host responds to the Sony API."""
+    async def try_call(
+        self,
+        service: str,
+        method: str,
+        params: list[Any] | None = None,
+        version: str = "1.0",
+    ) -> Any | None:
+        """Call a method, returning None on unsupported/errors."""
         try:
-            await self.call("guide", "getSupportedApiInfo", [], "1.0")
-        except SonyAudioApiError:
-            # Some receivers respond on /system even if guide is limited.
-            await self.call("system", "getSystemInformation", [], "1.0")
+            return await self.call(service, method, params, version)
+        except SonyAudioApiError as err:
+            _LOGGER.debug("Sony API probe failed for %s.%s: %s", service, method, err)
+            return None
 
-    async def get_supported_api_info(self) -> Any:
-        return await self.call("guide", "getSupportedApiInfo", [], "1.0")
+    async def get_supported_api_info(self) -> dict[str, SonyApiMethod]:
+        """Return supported API methods keyed by method name.
 
-    async def get_system_information(self) -> Any:
-        return await self.call("system", "getSystemInformation", [], "1.0")
+        Different devices return slightly different structures, so this parser is permissive.
+        """
+        result = await self.try_call("guide", "getSupportedApiInfo", [], "1.0")
+        methods: dict[str, SonyApiMethod] = {}
+        if not result:
+            return methods
 
-    async def get_power_status(self) -> Any:
-        return await self.call("system", "getPowerStatus", [], "1.0")
+        payload = result[0] if isinstance(result, list) and result else result
+        service_infos = payload if isinstance(payload, list) else payload.get("service", []) if isinstance(payload, dict) else []
 
-    async def set_power_status(self, status: str) -> None:
-        await self.call("system", "setPowerStatus", [{"status": status}], "1.0")
+        for service_info in service_infos:
+            service_name = service_info.get("service") or service_info.get("name") or service_info.get("serviceName")
+            if not service_name:
+                continue
+            for api in service_info.get("protocols", []) + service_info.get("apis", []) + service_info.get("methods", []):
+                name = api.get("name") or api.get("method")
+                if not name:
+                    continue
+                versions_raw = api.get("versions") or api.get("version") or ["1.0"]
+                if isinstance(versions_raw, str):
+                    versions = (versions_raw,)
+                else:
+                    versions = tuple(str(v) for v in versions_raw) or ("1.0",)
+                methods[name] = SonyApiMethod(str(service_name), str(name), versions)
+        return methods
 
-    async def get_volume_information(self) -> Any:
-        return await self.call("audio", "getVolumeInformation", [], "1.0")
+    async def power_status(self) -> str | None:
+        result = await self.try_call("system", "getPowerStatus", [], "1.1") or await self.try_call("system", "getPowerStatus", [], "1.0")
+        item = _first_item(result)
+        return item.get("status") if isinstance(item, dict) else None
 
-    async def set_audio_volume(self, volume: str, target: str = "") -> None:
-        params = [{"volume": volume}]
-        if target:
-            params[0]["target"] = target
-        await self.call("audio", "setAudioVolume", params, "1.0")
+    async def set_power(self, active: bool) -> None:
+        await self.call("system", "setPowerStatus", [{"status": active}], "1.1")
 
-    async def set_audio_mute(self, status: bool) -> None:
-        await self.call("audio", "setAudioMute", [{"status": status}], "1.0")
+    async def get_volume_information(self) -> list[dict[str, Any]]:
+        result = await self.try_call("audio", "getVolumeInformation", [], "1.0")
+        if isinstance(result, list) and result and isinstance(result[0], list):
+            return [x for x in result[0] if isinstance(x, dict)]
+        if isinstance(result, list):
+            return [x for x in result if isinstance(x, dict)]
+        return []
 
-    async def get_current_external_inputs_status(self) -> Any:
-        return await self.call("avContent", "getCurrentExternalInputsStatus", [], "1.0")
+    async def set_volume(self, volume: int, target: str = "master") -> None:
+        await self.call("audio", "setAudioVolume", [{"target": target, "volume": str(volume)}], "1.0")
 
-    async def get_playing_content_info(self) -> Any:
-        return await self.call("avContent", "getPlayingContentInfo", [], "1.0")
+    async def set_mute(self, mute: bool, target: str = "master") -> None:
+        await self.call("audio", "setAudioMute", [{"target": target, "mute": mute}], "1.0")
 
-    async def get_ext_input(self) -> Any:
-        return await self.call("avContent", "getExtInput", [], "1.0")
+    async def get_current_external_inputs_status(self) -> list[dict[str, Any]]:
+        result = await self.try_call("avContent", "getCurrentExternalInputsStatus", [], "1.0")
+        if isinstance(result, list) and result and isinstance(result[0], list):
+            return [x for x in result[0] if isinstance(x, dict)]
+        if isinstance(result, list):
+            return [x for x in result if isinstance(x, dict)]
+        return []
 
-    async def set_play_content(self, uri: str) -> None:
-        await self.call("avContent", "setPlayContent", [{"uri": uri}], "1.0")
+    async def get_playing_content_info(self) -> dict[str, Any]:
+        result = await self.try_call("avContent", "getPlayingContentInfo", [], "1.0")
+        item = _first_item(result)
+        return item if isinstance(item, dict) else {}
 
-    async def get_speaker_setting(self, target: str) -> Any:
-        return await self.call("audio", "getSpeakerSettings", [{"target": target}], "1.0")
+    async def get_setting(self, getter: str, target: str) -> dict[str, Any] | None:
+        service = "audio"
+        result = await self.try_call(service, getter, [{"target": target}], "1.0")
+        item = _first_item(result)
+        if isinstance(item, dict):
+            return item
+        return None
 
-    async def set_speaker_setting(self, target: str, value: str) -> None:
-        await self.call(
-            "audio",
-            "setSpeakerSettings",
-            [{"settings": [{"target": target, "value": value}]}],
-            "1.0",
-        )
+    async def set_setting(self, setter: str, target: str, value: Any) -> None:
+        await self.call("audio", setter, [{"settings": [{"target": target, "value": str(value)}]}], "1.0")
 
-    async def get_sound_setting(self, target: str) -> Any:
-        return await self.call("audio", "getSoundSettings", [{"target": target}], "1.0")
 
-    async def set_sound_setting(self, target: str, value: str) -> None:
-        await self.call(
-            "audio",
-            "setSoundSettings",
-            [{"settings": [{"target": target, "value": value}]}],
-            "1.0",
-        )
+def _first_item(result: Any) -> Any:
+    if isinstance(result, list) and result:
+        if isinstance(result[0], list) and result[0]:
+            return result[0][0]
+        return result[0]
+    return result

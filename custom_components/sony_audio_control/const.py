@@ -1,32 +1,19 @@
-"""Constants for Sony Audio Control."""
+from __future__ import annotations
+
+from datetime import timedelta
 
 DOMAIN = "sony_audio_control"
-DEFAULT_PORT = 10000
-DEFAULT_SCAN_INTERVAL_SECONDS = 30
-
 CONF_PORT = "port"
+DEFAULT_PORT = 10000
+DEFAULT_SCAN_INTERVAL = timedelta(seconds=30)
+REQUEST_TIMEOUT = 10
 
 PLATFORMS = ["media_player", "number", "select", "sensor", "switch"]
 
-SERVICE_AUDIO = "audio"
-SERVICE_SYSTEM = "system"
-SERVICE_AV_CONTENT = "avContent"
-SERVICE_GUIDE = "guide"
+ATTR_SERVICE = "service"
+ATTR_METHOD = "method"
+ATTR_PARAMS = "params"
+ATTR_VERSION = "version"
+ATTR_ENTRY_ID = "entry_id"
 
-DEFAULT_SPEAKER_LEVEL_TARGETS = {
-    "subwooferLevel": "Subwoofer Level",
-    "frontLeftLevel": "Front Left Level",
-    "frontRightLevel": "Front Right Level",
-    "centerLevel": "Centre Level",
-    "surroundLeftLevel": "Surround Left Level",
-    "surroundRightLevel": "Surround Right Level",
-    "surroundBackLeftLevel": "Surround Back Left Level",
-    "surroundBackRightLevel": "Surround Back Right Level",
-    "heightLeftLevel": "Height Left Level",
-    "heightRightLevel": "Height Right Level",
-}
-
-DEFAULT_SELECT_TARGETS = {
-    "soundField": "Sound Field",
-    "speakerPattern": "Speaker Pattern",
-}
+SERVICE_CALL_METHOD = "call_method"
