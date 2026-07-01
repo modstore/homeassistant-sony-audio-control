@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,7 @@ from .const import (
 )
 from .coordinator import SonyAudioCoordinator
 from .sony.client import SonyAudioClient
+from .sony.diagnostics import redact
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -55,16 +57,43 @@ def _async_register_services(hass: HomeAssistant) -> None:
 
     async def async_dump_device_info(call: ServiceCall) -> None:
         host = call.data.get(CONF_HOST)
+        include_raw = bool(call.data.get("include_raw", False))
         coordinators = _coordinators(hass)
         coordinator = next((item for item in coordinators if not host or item.client.host == host), None)
         if coordinator is None:
             _LOGGER.warning("No Sony Audio Control config entry found for diagnostics dump")
             return
+
         targets = [desc.target for desc in coordinator.setting_descriptions if desc.target]
         dump = await coordinator.client.dump_device_info([target for target in targets if target])
-        path = Path(hass.config.path(f"sony_audio_control_{coordinator.client.host.replace('.', '_')}_dump.json"))
-        await hass.async_add_executor_job(path.write_text, json.dumps(dump, indent=2, sort_keys=True), "utf-8")
-        _LOGGER.info("Sony Audio Control device dump written to %s", path)
+        dump["discovered_entities"] = [
+            {
+                "key": desc.key,
+                "name": desc.name,
+                "kind": desc.kind,
+                "service": desc.service,
+                "target": desc.target,
+                "get_method": desc.get_method,
+                "set_method": desc.set_method,
+                "options": desc.option_values,
+                "min": desc.min_value,
+                "max": desc.max_value,
+                "step": desc.step,
+                "unit": desc.unit,
+                "raw": desc.raw,
+            }
+            for desc in coordinator.setting_descriptions
+        ]
+
+        payload = dump if include_raw else redact(dump)
+        diagnostics_dir = Path(hass.config.path("sony_audio_control", "diagnostics"))
+        await hass.async_add_executor_job(lambda: diagnostics_dir.mkdir(parents=True, exist_ok=True))
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        safe_host = coordinator.client.host.replace(".", "_").replace(":", "_")
+        suffix = "raw" if include_raw else "redacted"
+        path = diagnostics_dir / f"sony_audio_control_{safe_host}_{timestamp}_{suffix}.json"
+        await hass.async_add_executor_job(path.write_text, json.dumps(payload, indent=2, sort_keys=True), "utf-8")
+        _LOGGER.info("Sony Audio Control diagnostics dump written to %s", path)
 
     async def async_call_api(call: ServiceCall) -> None:
         host = call.data.get(CONF_HOST)
@@ -82,7 +111,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
         DOMAIN,
         SERVICE_DUMP_DEVICE_INFO,
         async_dump_device_info,
-        schema=vol.Schema({vol.Optional(CONF_HOST): cv.string}),
+        schema=vol.Schema({vol.Optional(CONF_HOST): cv.string, vol.Optional("include_raw", default=False): cv.boolean}),
     )
     hass.services.async_register(
         DOMAIN,

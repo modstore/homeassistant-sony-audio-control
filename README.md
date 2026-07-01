@@ -141,7 +141,7 @@ data:
 
 ### `sony_audio_control.dump_device_info`
 
-Writes a best-effort JSON dump of the receiver's supported APIs and discovered settings into your Home Assistant config directory.
+Writes a best-effort, share-safe JSON dump of the receiver's supported APIs and discovered settings into your Home Assistant config directory. By default the file redacts host and MAC-style identifiers, so it is suitable to attach to a public GitHub issue.
 
 ```yaml
 service: sony_audio_control.dump_device_info
@@ -152,10 +152,19 @@ data:
 The output file will be named similar to:
 
 ```text
-/config/sony_audio_control_192_168_1_14_dump.json
+/config/sony_audio_control/diagnostics/sony_audio_control_192_168_1_14_20260701-183000_redacted.json
 ```
 
-Attach that file to GitHub issues when requesting support for another Sony model.
+Only enable `include_raw` if you specifically need an unredacted local copy:
+
+```yaml
+service: sony_audio_control.dump_device_info
+data:
+  host: 192.168.1.14
+  include_raw: true
+```
+
+Attach the redacted file to GitHub issues when requesting support for another Sony model.
 
 ## Troubleshooting
 
@@ -226,8 +235,8 @@ For cleaner public releases:
 3. Create a version tag, for example:
 
    ```bash
-   git tag v0.1.5
-   git push origin v0.1.5
+   git tag v0.1.6
+   git push origin v0.1.6
    ```
 
 4. Create a GitHub Release from that tag.

@@ -8,6 +8,12 @@ dump_device_info:
       example: "192.168.1.14"
       selector:
         text:
+    include_raw:
+      name: Include raw identifiers
+      description: Include host and MAC addresses in the generated file. Leave off when sharing diagnostics publicly.
+      default: false
+      selector:
+        boolean:
 
 call_api:
   name: Call Sony API

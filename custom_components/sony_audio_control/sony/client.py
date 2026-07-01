@@ -144,19 +144,36 @@ class SonyAudioClient:
         await self.call("avContent", "setPlayContent", [{"uri": uri}])
 
     async def dump_device_info(self, discovered_targets: list[str] | None = None) -> dict[str, Any]:
-        """Best-effort device dump for diagnostics and issue reports."""
+        """Best-effort device dump for diagnostics and issue reports.
+
+        This deliberately favours successful partial diagnostics over failing the
+        whole dump when a model does not support a method or requires a slightly
+        different params shape.
+        """
         dump: dict[str, Any] = {
+            "host": self.host,
+            "port": self.port,
             "supported_api_info": await self.supported_api_info(),
-            "system_information": await self.try_call("system", "getSystemInformation"),
-            "power_status": await self.try_call("system", "getPowerStatus"),
-            "volume_information": await self.try_call("audio", "getVolumeInformation"),
-            "external_terminals": await self.try_call("avContent", "getCurrentExternalTerminalsStatus"),
-            "playing_content_info": await self.try_call("avContent", "getPlayingContentInfo"),
+            "system_information": await self.system_information(),
+            "power_status": await self.power_status(),
+            "volume_information": await self.volume_information(),
+            "speaker_settings_all": await self.try_call("audio", "getSpeakerSettings", [{}]),
+            "sound_settings_all": await self.try_call("audio", "getSoundSettings", [{}], version="1.1"),
+            "custom_equalizer_settings": await self.try_call("audio", "getCustomEqualizerSettings", [{}]),
+            "source_list": await self.try_call("avContent", "getSourceList", [{"scheme": "extInput"}], version="1.2"),
+            "current_external_terminals_status": await self.try_call("avContent", "getCurrentExternalTerminalsStatus"),
+            "playing_content_info": await self.try_call("avContent", "getPlayingContentInfo", [], version="1.2"),
+            "available_playback_function": await self.try_call("avContent", "getAvailablePlaybackFunction"),
+            "power_settings": await self.try_call("system", "getPowerSettings", [{}]),
+            "sleep_timer_settings": await self.try_call("system", "getSleepTimerSettings", [{}]),
+            "device_misc_settings": await self.try_call("system", "getDeviceMiscSettings", [{}]),
+            "interface_information": await self.try_call("system", "getInterfaceInformation"),
+            "software_update_info": await self.try_call("system", "getSWUpdateInfo"),
         }
         settings: dict[str, Any] = {}
         for target in discovered_targets or []:
             settings[target] = {
-                "sound": await self.try_call("audio", "getSoundSettings", [{"target": target}]),
+                "sound": await self.try_call("audio", "getSoundSettings", [{"target": target}], version="1.1"),
                 "speaker": await self.try_call("audio", "getSpeakerSettings", [{"target": target}]),
             }
         dump["target_probe_results"] = settings
