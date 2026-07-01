@@ -3,15 +3,16 @@
     "step": {
       "user": {
         "title": "Sony Audio Control",
-        "description": "Connect to a Sony receiver, amplifier, soundbar, or speaker using the local Sony REST API.",
+        "description": "Connect to a Sony audio receiver, amplifier, soundbar, or speaker that supports Sony's local JSON-RPC API.",
         "data": {
-          "host": "IP address or hostname",
+          "host": "Host/IP address",
           "port": "Port"
         }
       }
     },
     "error": {
-      "cannot_connect": "Could not connect to the Sony device. Check the IP address, port, and network standby/control settings."
+      "cannot_connect": "Unable to connect to the Sony device.",
+      "unknown": "Unexpected error"
     },
     "abort": {
       "already_configured": "This Sony device is already configured."

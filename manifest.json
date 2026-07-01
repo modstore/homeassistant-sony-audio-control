@@ -5,9 +5,11 @@
   "config_flow": true,
   "documentation": "https://github.com/modstore/homeassistant-sony-audio-control",
   "issue_tracker": "https://github.com/modstore/homeassistant-sony-audio-control/issues",
-  "codeowners": ["@modstore"],
+  "codeowners": [
+    "@modstore"
+  ],
   "iot_class": "local_polling",
-  "integration_type": "device",
   "requirements": [],
-  "loggers": ["custom_components.sony_audio_control"]
+  "loggers": [],
+  "integration_type": "device"
 }

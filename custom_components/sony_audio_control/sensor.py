@@ -1,3 +1,4 @@
+"""Sensor platform for Sony Audio Control."""
 from __future__ import annotations
 
 from homeassistant.components.sensor import SensorEntity
@@ -5,75 +6,39 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
 from .coordinator import SonyAudioCoordinator
-from .discovery import DynamicSettingDescription
 from .entity import SonyAudioEntity
+from .sony.models import SettingDescription
+
+CORE_SENSORS = [
+    SettingDescription(key="power_status", name="Power Status", kind="sensor", service="system"),
+    SettingDescription(key="current_input", name="Current Input", kind="sensor", service="avContent"),
+    SettingDescription(key="model_name", name="Model", kind="sensor", service="system"),
+]
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    coordinator: SonyAudioCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SensorEntity] = [
-        SonyAudioPowerSensor(coordinator),
-        SonyAudioSupportedMethodsSensor(coordinator),
-        SonyAudioPlayingContentSensor(coordinator),
-    ]
-    entities.extend(
-        SonyAudioSettingSensor(coordinator, desc)
-        for desc in coordinator.dynamic_settings
-        if desc.kind == "sensor"
-    )
+    coordinator: SonyAudioCoordinator = entry.runtime_data
+    entities = [SonyAudioSensor(coordinator, desc) for desc in CORE_SENSORS]
+    entities.extend(SonyAudioSensor(coordinator, desc) for desc in coordinator.setting_descriptions if desc.kind == "sensor" and desc.key != "media_player_main")
     async_add_entities(entities)
 
-class SonyAudioPowerSensor(SonyAudioEntity, SensorEntity):
-    _attr_name = "Power status"
-    _attr_icon = "mdi:power"
 
-    def __init__(self, coordinator: SonyAudioCoordinator) -> None:
-        super().__init__(coordinator, "sensor_power_status")
+class SonyAudioSensor(SonyAudioEntity, SensorEntity):
+    """Sony diagnostic/current value sensor."""
 
     @property
     def native_value(self):
-        return self.coordinator.data.power_status if self.coordinator.data else None
-
-class SonyAudioSupportedMethodsSensor(SonyAudioEntity, SensorEntity):
-    _attr_name = "Supported API methods"
-    _attr_icon = "mdi:api"
-
-    def __init__(self, coordinator: SonyAudioCoordinator) -> None:
-        super().__init__(coordinator, "sensor_supported_api_methods")
-
-    @property
-    def native_value(self):
-        return len(self.coordinator.supported_methods)
-
-    @property
-    def extra_state_attributes(self):
-        return {"methods": sorted(self.coordinator.supported_methods)}
-
-class SonyAudioPlayingContentSensor(SonyAudioEntity, SensorEntity):
-    _attr_name = "Playing content"
-    _attr_icon = "mdi:information-outline"
-
-    def __init__(self, coordinator: SonyAudioCoordinator) -> None:
-        super().__init__(coordinator, "sensor_playing_content")
-
-    @property
-    def native_value(self):
-        data = self.coordinator.data.playing_content if self.coordinator.data else {}
-        return data.get("title") or data.get("source") or data.get("uri")
-
-    @property
-    def extra_state_attributes(self):
-        return self.coordinator.data.playing_content if self.coordinator.data else {}
-
-class SonyAudioSettingSensor(SonyAudioEntity, SensorEntity):
-    def __init__(self, coordinator: SonyAudioCoordinator, description: DynamicSettingDescription) -> None:
-        super().__init__(coordinator, f"sensor_{description.key}")
-        self.description = description
-        self._attr_name = description.name
-        self._attr_icon = description.icon
-
-    @property
-    def native_value(self):
-        value = self.coordinator.setting_value(self.description.key)
-        return str(value) if value is not None else None
+        data = self.coordinator.data
+        if not data:
+            return None
+        key = self.description.key
+        if key == "power_status":
+            return data.power
+        if key == "current_input":
+            return data.input_title or data.input_uri
+        if key == "model_name":
+            return data.model_name
+        if self.description.target:
+            return data.sound_settings.get(self.description.target, data.speaker_settings.get(self.description.target))
+        return None

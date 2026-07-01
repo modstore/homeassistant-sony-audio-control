@@ -1,77 +1,98 @@
+"""DataUpdateCoordinator for Sony Audio Control."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from datetime import timedelta
+import logging
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import SonyAudioApi, SonyAudioApiError, SonyApiMethod
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
-from .discovery import DynamicSettingDescription, discover_dynamic_settings
+from .const import DEFAULT_SCAN_INTERVAL_SECONDS, DOMAIN
+from .sony.client import SonyAudioClient
+from .sony.discovery import discover_settings
+from .sony.models import DeviceSnapshot, SettingDescription
+from .sony.exceptions import SonyAudioError
+
+_LOGGER = logging.getLogger(__name__)
 
 
-@dataclass
-class SonyAudioData:
-    power_status: str | None = None
-    volumes: list[dict[str, Any]] = field(default_factory=list)
-    inputs: list[dict[str, Any]] = field(default_factory=list)
-    playing_content: dict[str, Any] = field(default_factory=dict)
-    settings: dict[str, dict[str, Any] | None] = field(default_factory=dict)
+class SonyAudioCoordinator(DataUpdateCoordinator[DeviceSnapshot]):
+    """Coordinator for Sony audio device data."""
 
-
-class SonyAudioCoordinator(DataUpdateCoordinator[SonyAudioData]):
-    """Coordinator holding discovered capabilities and current state."""
-
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        self.entry = entry
-        self.api = SonyAudioApi(
-            async_get_clientsession(hass),
-            entry.data["host"],
-            int(entry.data["port"]),
-        )
-        self.supported_methods: dict[str, SonyApiMethod] = {}
-        self.dynamic_settings: list[DynamicSettingDescription] = []
+    def __init__(self, hass: HomeAssistant, client: SonyAudioClient) -> None:
         super().__init__(
             hass,
-            logger=__import__("logging").getLogger(__name__),
+            _LOGGER,
             name=DOMAIN,
-            update_interval=DEFAULT_SCAN_INTERVAL,
+            update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL_SECONDS),
         )
-
-    async def async_config_entry_first_refresh(self) -> None:
-        await self.async_discover()
-        await super().async_config_entry_first_refresh()
+        self.client = client
+        self.supported_api_info: dict[str, Any] = {}
+        self.setting_descriptions: list[SettingDescription] = []
 
     async def async_discover(self) -> None:
-        self.supported_methods = await self.api.get_supported_api_info()
-        self.dynamic_settings = await discover_dynamic_settings(self.api)
+        self.supported_api_info, self.setting_descriptions = await discover_settings(self.client)
 
-    async def _async_update_data(self) -> SonyAudioData:
+    async def _async_update_data(self) -> DeviceSnapshot:
         try:
-            data = SonyAudioData()
-            data.power_status = await self.api.power_status()
-            data.volumes = await self.api.get_volume_information()
-            data.inputs = await self.api.get_current_external_inputs_status()
-            data.playing_content = await self.api.get_playing_content_info()
-            for desc in self.dynamic_settings:
-                data.settings[desc.key] = await self.api.get_setting(desc.getter, desc.target)
-            return data
-        except SonyAudioApiError as err:
+            system_info = await self.client.system_information()
+            power_status = await self.client.power_status()
+            volumes = await self.client.volume_information()
+            sources = await self.client.source_list()
+            playing_info = await self.client.playing_content_info()
+
+            snap = DeviceSnapshot(
+                available=True,
+                model_name=system_info.get("modelName") or system_info.get("model") or system_info.get("productName"),
+                device_name=system_info.get("productName") or system_info.get("deviceName") or system_info.get("modelName"),
+                power=power_status.get("status"),
+                system_info=system_info,
+                playing_info=playing_info,
+            )
+
+            speaker_volume = next((v for v in volumes if v.get("target") in ("speaker", "")), volumes[0] if volumes else {})
+            if speaker_volume:
+                if speaker_volume.get("volume") is not None:
+                    snap.volume = int(float(speaker_volume["volume"]))
+                if speaker_volume.get("minVolume") is not None:
+                    snap.min_volume = int(float(speaker_volume["minVolume"]))
+                if speaker_volume.get("maxVolume") is not None:
+                    snap.max_volume = int(float(speaker_volume["maxVolume"]))
+                if speaker_volume.get("mute") is not None:
+                    snap.mute = bool(speaker_volume["mute"])
+
+            current_source = next((s for s in sources if s.get("active") or s.get("status") == "active"), sources[0] if sources else {})
+            snap.input_uri = current_source.get("uri") or playing_info.get("uri")
+            snap.input_title = current_source.get("title") or playing_info.get("source") or playing_info.get("title")
+
+            for desc in self.setting_descriptions:
+                if not desc.target or desc.key in {"media_player_main", "audio_mute", "input_source"}:
+                    continue
+                if desc.get_method == "getSpeakerSettings":
+                    data = await self.client.try_call(desc.service, desc.get_method, [{"target": desc.target}])
+                    value = _extract_value(data)
+                    if value is not None:
+                        snap.speaker_settings[desc.target] = value
+                elif desc.get_method == "getSoundSettings":
+                    data = await self.client.try_call(desc.service, desc.get_method, [{"target": desc.target}])
+                    value = _extract_value(data)
+                    if value is not None:
+                        snap.sound_settings[desc.target] = value
+
+            return snap
+        except SonyAudioError as err:
             raise UpdateFailed(str(err)) from err
 
-    def setting_value(self, key: str) -> Any:
-        setting = self.data.settings.get(key) if self.data else None
-        if isinstance(setting, dict):
-            return setting.get("currentValue", setting.get("value"))
-        return None
 
-    def primary_volume(self) -> dict[str, Any] | None:
-        if not self.data:
-            return None
-        for volume in self.data.volumes:
-            if volume.get("target") in ("master", "speaker", "main"):
-                return volume
-        return self.data.volumes[0] if self.data.volumes else None
+def _extract_value(payload: Any) -> Any:
+    if isinstance(payload, dict):
+        if "settings" in payload and isinstance(payload["settings"], list) and payload["settings"]:
+            return _extract_value(payload["settings"][0])
+        return payload.get("value")
+    if isinstance(payload, list):
+        for item in payload:
+            value = _extract_value(item)
+            if value is not None:
+                return value
+    return None

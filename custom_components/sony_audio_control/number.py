@@ -1,50 +1,58 @@
+"""Number platform for Sony Audio Control."""
 from __future__ import annotations
 
-from typing import Any
-
-from homeassistant.components.number import NumberEntity
+from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
 from .coordinator import SonyAudioCoordinator
-from .discovery import DynamicSettingDescription
 from .entity import SonyAudioEntity
 
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    coordinator: SonyAudioCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
-        SonyAudioNumber(coordinator, desc)
-        for desc in coordinator.dynamic_settings
-        if desc.kind == "number"
-    )
+    coordinator: SonyAudioCoordinator = entry.runtime_data
+    async_add_entities([SonyAudioNumber(coordinator, desc) for desc in coordinator.setting_descriptions if desc.kind == "number"])
+
 
 class SonyAudioNumber(SonyAudioEntity, NumberEntity):
-    def __init__(self, coordinator: SonyAudioCoordinator, description: DynamicSettingDescription) -> None:
-        super().__init__(coordinator, f"number_{description.key}")
-        self.description = description
-        self._attr_name = description.name
-        self._attr_icon = description.icon
-        self._attr_native_min_value = description.native_min_value
-        self._attr_native_max_value = description.native_max_value
-        self._attr_native_step = description.native_step
+    """Sony numeric setting."""
+
+    _attr_mode = NumberMode.SLIDER
+
+    @property
+    def native_min_value(self) -> float:
+        return self.description.min_value if self.description.min_value is not None else -10
+
+    @property
+    def native_max_value(self) -> float:
+        return self.description.max_value if self.description.max_value is not None else 10
+
+    @property
+    def native_step(self) -> float:
+        return self.description.step if self.description.step is not None else 0.5
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        return self.description.unit
 
     @property
     def native_value(self) -> float | None:
-        return _to_float(self.coordinator.setting_value(self.description.key))
+        data = self.coordinator.data
+        if not data or not self.description.target:
+            return None
+        value = data.speaker_settings.get(self.description.target, data.sound_settings.get(self.description.target))
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
 
     async def async_set_native_value(self, value: float) -> None:
-        if not self.description.setter:
+        if not self.description.target or not self.description.set_method:
             return
-        await self.coordinator.api.set_setting(self.description.setter, self.description.target, value)
+        text = str(int(value)) if float(value).is_integer() else str(value)
+        if self.description.set_method == "setSpeakerSettings":
+            await self.coordinator.client.set_speaker_setting(self.description.target, text)
+        elif self.description.set_method == "setSoundSettings":
+            await self.coordinator.client.set_sound_setting(self.description.target, text)
         await self.coordinator.async_request_refresh()
-
-
-def _to_float(value: Any) -> float | None:
-    try:
-        if value is None or value == "":
-            return None
-        return float(value)
-    except (TypeError, ValueError):
-        return None

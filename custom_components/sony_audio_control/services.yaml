@@ -1,27 +1,39 @@
-call_method:
+dump_device_info:
+  name: Dump device info
+  description: Query the Sony device and write a JSON diagnostics dump into the Home Assistant config directory.
   fields:
-    entry_id:
-      required: true
+    host:
+      name: Host
+      description: Optional host/IP if multiple Sony Audio Control devices are configured.
+      example: "192.168.1.14"
       selector:
         text:
-    service:
+
+call_api:
+  name: Call Sony API
+  description: Advanced/debug service for calling a Sony JSON-RPC endpoint directly. Result is written to the Home Assistant log.
+  fields:
+    host:
+      name: Host
+      description: Optional host/IP if multiple Sony Audio Control devices are configured.
+      example: "192.168.1.14"
+      selector:
+        text:
+    endpoint:
+      name: Endpoint
       required: true
-      example: audio
+      example: "audio"
       selector:
         text:
     method:
+      name: Method
       required: true
-      example: getSpeakerSettings
+      example: "getSpeakerSettings"
       selector:
         text:
     params:
-      required: false
-      example:
-        - target: subwooferLevel
+      name: Params
+      description: JSON-RPC params array.
+      example: [{"target": "subwooferLevel"}]
       selector:
         object:
-    version:
-      required: false
-      default: "1.0"
-      selector:
-        text:
