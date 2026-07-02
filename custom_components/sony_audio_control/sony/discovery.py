@@ -159,11 +159,11 @@ def _classify_setting(
     sony_type_str = str(setting.get("type") or "").lower()
 
     # Map to SettingType enum where possible
-    if sony_type_str == SettingType.NUMBER:
+    if sony_type_str == SettingType.NUMBER.value.lower():
         mapped_type = SettingType.NUMBER
-    elif sony_type_str == SettingType.ENUM:
+    elif sony_type_str == SettingType.ENUM.value.lower():
         mapped_type = SettingType.ENUM
-    elif sony_type_str == SettingType.BOOLEAN:
+    elif sony_type_str == SettingType.BOOLEAN.value.lower():
         mapped_type = SettingType.BOOLEAN
     else:
         mapped_type = SettingType.UNKNOWN

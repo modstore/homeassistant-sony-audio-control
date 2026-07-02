@@ -435,7 +435,12 @@ class SonyAudioClient:
         return data if isinstance(data, dict) else {}
 
     async def set_play_content(self, uri: str) -> None:
-        await self.call(SERVICE_AV_CONTENT, SET_PLAY_CONTENT, [{"uri": uri}])
+        await self.call(
+            SERVICE_AV_CONTENT,
+            SET_PLAY_CONTENT,
+            [{"uri": uri}],
+            version="1.2",
+        )
 
     async def dump_device_info(
         self, discovered_targets: list[str] | None = None

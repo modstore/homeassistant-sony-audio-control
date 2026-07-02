@@ -1,7 +1,7 @@
 {
   "domain": "sony_audio_control",
   "name": "Sony Audio Control",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "config_flow": true,
   "documentation": "https://github.com/modstore/homeassistant-sony-audio-control",
   "issue_tracker": "https://github.com/modstore/homeassistant-sony-audio-control/issues",
