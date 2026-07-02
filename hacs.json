@@ -1,13 +1,5 @@
 {
   "name": "Sony Audio Control",
   "render_readme": true,
-  "homeassistant": "2025.1.0",
-  "domains": [
-    "media_player",
-    "number",
-    "select",
-    "sensor",
-    "switch",
-    "button"
-  ]
+  "homeassistant": "2025.1.0"
 }
