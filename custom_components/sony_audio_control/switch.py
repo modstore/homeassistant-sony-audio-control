@@ -53,9 +53,8 @@ class SonyAudioSwitch(SonySettingEntity, SwitchEntity):
 
     async def _set(self, value: bool) -> None:
         if self.description.key == "audio_mute":
-            await self.coordinator.client.set_mute(value)
+            await self.coordinator.async_set_mute(value)
         elif self.description.target and self.description.set_method == SET_SOUND_SETTINGS:
-            await self.coordinator.client.set_sound_setting(self.description.target, "on" if value else "off")
+            await self.coordinator.async_set_sound_setting(self.description.target, "on" if value else "off")
         elif self.description.target and self.description.set_method == SET_SPEAKER_SETTINGS:
-            await self.coordinator.client.set_speaker_setting(self.description.target, "on" if value else "off")
-        await self.coordinator.async_request_refresh()
+            await self.coordinator.async_set_speaker_setting(self.description.target, "on" if value else "off")

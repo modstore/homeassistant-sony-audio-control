@@ -61,6 +61,66 @@ class SonyAudioCoordinator(DataUpdateCoordinator[SonyState]):
             self.client
         )
 
+    async def async_set_setting(self, domain: str, target: str, value: Any) -> None:
+        """Set a speaker or sound setting and optimistically update cache."""
+        if domain == "speaker":
+            await self.async_set_speaker_setting(target, value)
+        elif domain == "sound":
+            await self.async_set_sound_setting(target, value)
+        else:
+            raise ValueError(f"Unknown domain: {domain}")
+
+    async def async_set_speaker_setting(self, target: str, value: Any) -> None:
+        """Set a speaker setting and optimistically update cache."""
+        await self.client.set_speaker_setting(target, str(value))
+        if self.state and target in self.state.speaker_settings:
+            self.state.speaker_settings[target].current_value = value
+            self.async_update_listeners()
+            _LOGGER.debug("Optimistic update applied: speaker.%s=%s", target, value)
+        else:
+            _LOGGER.debug("Optimistic update skipped: target %s not in cache", target)
+
+    async def async_set_sound_setting(self, target: str, value: Any) -> None:
+        """Set a sound setting and optimistically update cache."""
+        await self.client.set_sound_setting(target, str(value))
+        if self.state and target in self.state.sound_settings:
+            self.state.sound_settings[target].current_value = value
+            self.async_update_listeners()
+            _LOGGER.debug("Optimistic update applied: sound.%s=%s", target, value)
+        else:
+            _LOGGER.debug("Optimistic update skipped: target %s not in cache", target)
+
+    async def async_set_volume(self, volume: int | float) -> None:
+        """Set volume and optimistically update cache."""
+        await self.client.set_volume(int(volume))
+        if self.state and self.state.volume is not None:
+            self.state.volume.volume = int(volume)
+            self.async_update_listeners()
+            _LOGGER.debug("Optimistic update applied: volume.volume=%s", volume)
+
+    async def async_set_mute(self, muted: bool) -> None:
+        """Set mute and optimistically update cache."""
+        await self.client.set_mute(muted)
+        if self.state and self.state.volume is not None:
+            self.state.volume.muted = muted
+            self.async_update_listeners()
+            _LOGGER.debug("Optimistic update applied: volume.muted=%s", muted)
+
+    async def async_select_source(self, source: str) -> None:
+        """Select a source and optimistically update cache."""
+        if not self.state or not self.state.sources:
+            _LOGGER.debug("Optimistic update skipped: no cached sources")
+            return
+        matched = next((s for s in self.state.sources if s.title == source), None)
+        if not matched:
+            _LOGGER.debug("Optimistic update skipped: source %s not in cached sources", source)
+            return
+        await self.client.set_play_content(matched.uri)
+        self.state.input_title = source
+        self.state.input_uri = matched.uri
+        self.async_update_listeners()
+        _LOGGER.debug("Optimistic update applied: source=%s", source)
+
     async def _async_update_data(self) -> SonyState:
         try:
             start = datetime.now()

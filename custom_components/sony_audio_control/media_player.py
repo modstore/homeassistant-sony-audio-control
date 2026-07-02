@@ -107,29 +107,25 @@ class SonyAudioMediaPlayer(SonyAudioEntity, MediaPlayerEntity):
 
     async def async_turn_on(self) -> None:
         await self.coordinator.client.set_power(True)
-        await self.coordinator.async_request_refresh()
+        if self.coordinator.state:
+            self.coordinator.state.power = "active"
+            self.coordinator.async_update_listeners()
 
     async def async_turn_off(self) -> None:
         await self.coordinator.client.set_power(False)
-        await self.coordinator.async_request_refresh()
+        if self.coordinator.state:
+            self.coordinator.state.power = "standby"
+            self.coordinator.async_update_listeners()
 
     async def async_set_volume_level(self, volume: float) -> None:
         state = self.coordinator.data
         if not state or state.volume is None:
             return
         vol = state.volume
-        await self.coordinator.client.set_volume(round(vol.min_volume + volume * (vol.max_volume - vol.min_volume)))
-        await self.coordinator.async_request_refresh()
+        await self.coordinator.async_set_volume(round(vol.min_volume + volume * (vol.max_volume - vol.min_volume)))
 
     async def async_mute_volume(self, mute: bool) -> None:
-        await self.coordinator.client.set_mute(mute)
-        await self.coordinator.async_request_refresh()
+        await self.coordinator.async_set_mute(mute)
 
     async def async_select_source(self, source: str) -> None:
-        state = self.coordinator.data
-        if not state or not state.sources:
-            return
-        matched = next((s for s in state.sources if s.title == source), None)
-        if matched:
-            await self.coordinator.client.set_play_content(matched.uri)
-            await self.coordinator.async_request_refresh()
+        await self.coordinator.async_select_source(source)

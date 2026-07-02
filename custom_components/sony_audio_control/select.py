@@ -65,7 +65,6 @@ class SonyAudioSelect(SonySettingEntity, SelectEntity):
             return
         value = self.description.option_map.get(option, option)
         if self.description.set_method == SET_SPEAKER_SETTINGS:
-            await self.coordinator.client.set_speaker_setting(self.description.target, value)
+            await self.coordinator.async_set_speaker_setting(self.description.target, value)
         elif self.description.set_method == SET_SOUND_SETTINGS:
-            await self.coordinator.client.set_sound_setting(self.description.target, value)
-        await self.coordinator.async_request_refresh()
+            await self.coordinator.async_set_sound_setting(self.description.target, value)
