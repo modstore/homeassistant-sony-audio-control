@@ -12,7 +12,9 @@ from .entity import SonyAudioEntity
 from .sony.models import SettingDescription
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     coordinator: SonyAudioCoordinator = entry.runtime_data
     if any(desc.key == "media_player_main" for desc in coordinator.setting_descriptions):
         async_add_entities([SonyAudioMediaPlayer(coordinator)])
@@ -30,7 +32,12 @@ class SonyAudioMediaPlayer(SonyAudioEntity, MediaPlayerEntity):
     )
 
     def __init__(self, coordinator: SonyAudioCoordinator) -> None:
-        super().__init__(coordinator, SettingDescription(key="media_player_main", name="Receiver", kind="sensor", service="core"))
+        super().__init__(
+            coordinator,
+            SettingDescription(
+                key="media_player_main", name="Receiver", kind="sensor", service="core"
+            ),
+        )
 
     @property
     def state(self) -> MediaPlayerState | None:
@@ -43,18 +50,20 @@ class SonyAudioMediaPlayer(SonyAudioEntity, MediaPlayerEntity):
 
     @property
     def volume_level(self) -> float | None:
-        data = self.coordinator.data
-        if not data or data.volume is None:
+        state = self.coordinator.data
+        if not state or state.volume is None:
             return None
-        min_v = data.min_volume if data.min_volume is not None else 0
-        max_v = data.max_volume if data.max_volume is not None else 100
+        vol = state.volume
+        min_v = vol.min_volume
+        max_v = vol.max_volume
         if max_v <= min_v:
             return None
-        return (data.volume - min_v) / (max_v - min_v)
+        return (vol.volume - min_v) / (max_v - min_v)
 
     @property
     def is_volume_muted(self) -> bool | None:
-        return self.coordinator.data.mute if self.coordinator.data else None
+        state = self.coordinator.data
+        return state.volume.muted if state and state.volume else None
 
     @property
     def source(self) -> str | None:
@@ -73,10 +82,11 @@ class SonyAudioMediaPlayer(SonyAudioEntity, MediaPlayerEntity):
         await self.coordinator.async_request_refresh()
 
     async def async_set_volume_level(self, volume: float) -> None:
-        data = self.coordinator.data
-        min_v = data.min_volume if data and data.min_volume is not None else 0
-        max_v = data.max_volume if data and data.max_volume is not None else 100
-        await self.coordinator.client.set_volume(round(min_v + volume * (max_v - min_v)))
+        state = self.coordinator.data
+        if not state or state.volume is None:
+            return
+        vol = state.volume
+        await self.coordinator.client.set_volume(round(vol.min_volume + volume * (vol.max_volume - vol.min_volume)))
         await self.coordinator.async_request_refresh()
 
     async def async_mute_volume(self, mute: bool) -> None:

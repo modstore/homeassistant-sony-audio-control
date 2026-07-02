@@ -8,15 +8,24 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import SUBWOOFER_MANUAL_PRESET, SUBWOOFER_PRESET_KEY, SUBWOOFER_PRESETS
 from .coordinator import SonyAudioCoordinator
-from .entity import SonyAudioEntity
+from .entity_factory import create as entity_factory_create
+from .setting_entity import SonySettingEntity
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     coordinator: SonyAudioCoordinator = entry.runtime_data
-    async_add_entities([SonyAudioSelect(coordinator, desc) for desc in coordinator.setting_descriptions if desc.kind == "select" and desc.key != "input_source"])
+    async_add_entities(
+        [
+            entity_factory_create(coordinator, desc)
+            for desc in coordinator.setting_descriptions
+            if desc.kind == "select" and desc.key != "input_source"
+        ]
+    )
 
 
-class SonyAudioSelect(SonyAudioEntity, SelectEntity):
+class SonyAudioSelect(SonySettingEntity, SelectEntity):
     """Sony selectable setting."""
 
     @property
@@ -25,10 +34,10 @@ class SonyAudioSelect(SonyAudioEntity, SelectEntity):
 
     @property
     def current_option(self) -> str | None:
-        data = self.coordinator.data
-        if not data or not self.description.target:
+        setting = self._setting
+        if not setting:
             return None
-        value = data.sound_settings.get(self.description.target, data.speaker_settings.get(self.description.target))
+        value = setting.current_value
         if value is None:
             return None
         if self.description.key == SUBWOOFER_PRESET_KEY:

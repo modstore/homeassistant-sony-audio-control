@@ -7,15 +7,24 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import SonyAudioCoordinator
-from .entity import SonyAudioEntity
+from .entity_factory import create as entity_factory_create
+from .setting_entity import SonySettingEntity
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     coordinator: SonyAudioCoordinator = entry.runtime_data
-    async_add_entities([SonyAudioNumber(coordinator, desc) for desc in coordinator.setting_descriptions if desc.kind == "number"])
+    async_add_entities(
+        [
+            entity_factory_create(coordinator, desc)
+            for desc in coordinator.setting_descriptions
+            if desc.kind == "number"
+        ]
+    )
 
 
-class SonyAudioNumber(SonyAudioEntity, NumberEntity):
+class SonyAudioNumber(SonySettingEntity, NumberEntity):
     """Sony numeric setting."""
 
     _attr_mode = NumberMode.SLIDER
@@ -38,12 +47,11 @@ class SonyAudioNumber(SonyAudioEntity, NumberEntity):
 
     @property
     def native_value(self) -> float | None:
-        data = self.coordinator.data
-        if not data or not self.description.target:
+        setting = self._setting
+        if not setting:
             return None
-        value = data.speaker_settings.get(self.description.target, data.sound_settings.get(self.description.target))
         try:
-            return float(value)
+            return float(setting.current_value)
         except (TypeError, ValueError):
             return None
 

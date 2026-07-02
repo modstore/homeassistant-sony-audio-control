@@ -11,7 +11,9 @@ from .entity import SonyAudioEntity
 from .sony.models import SettingDescription
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     coordinator: SonyAudioCoordinator = entry.runtime_data
     buttons = [
         SettingDescription(key="refresh", name="Refresh", kind="button", service="core", icon="mdi:refresh"),

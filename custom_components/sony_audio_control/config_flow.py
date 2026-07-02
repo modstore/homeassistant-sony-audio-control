@@ -1,11 +1,10 @@
 """Config flow for Sony Audio Control."""
 from __future__ import annotations
 
-from typing import Any
 import logging
+from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -43,7 +42,7 @@ class SonyAudioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.debug("Sony Audio validation returned API error, falling back to audio probe: %s", err)
                 try:
                     await client.get_speaker_setting("subwooferLevel")
-                except Exception as fallback_err:  # noqa: BLE001 - keep config flow user-friendly
+                except Exception:  # noqa: BLE001 - keep config flow user-friendly
                     _LOGGER.exception("Sony Audio fallback validation failed")
                     errors["base"] = "cannot_connect"
                 else:

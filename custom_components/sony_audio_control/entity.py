@@ -14,7 +14,9 @@ class SonyAudioEntity(CoordinatorEntity[SonyAudioCoordinator]):
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: SonyAudioCoordinator, description: SettingDescription) -> None:
+    def __init__(
+        self, coordinator: SonyAudioCoordinator, description: SettingDescription
+    ) -> None:
         super().__init__(coordinator)
         self.description = description
         self._attr_unique_id = f"{coordinator.client.host}_{description.key}"
@@ -25,12 +27,30 @@ class SonyAudioEntity(CoordinatorEntity[SonyAudioCoordinator]):
 
     @property
     def device_info(self) -> DeviceInfo:
-        data = self.coordinator.data
-        name = data.device_name if data else None
-        model = data.model_name if data else None
-        system_info = data.system_info if data else {}
-        serial = system_info.get("serial") or system_info.get("serialNumber") or system_info.get("macAddr")
-        version = system_info.get("version")
+        state = self.coordinator.data
+        system = state.system if state else None
+        system_info = system.raw if system else {}
+        name = (
+            state.device_name
+            if state
+            else system_info.get("productName")
+            or system_info.get("deviceName")
+            or system_info.get("modelName")
+        )
+        model = (
+            state.model_name
+            if state
+            else system_info.get("modelName")
+            or system_info.get("model")
+        )
+        serial = (
+            system_info.get("serial")
+            or system_info.get("serialNumber")
+            or system.mac
+            if system
+            else None
+        )
+        version = system.firmware if system else None
         identifiers = {(DOMAIN, str(serial or self.coordinator.client.host))}
         return DeviceInfo(
             identifiers=identifiers,

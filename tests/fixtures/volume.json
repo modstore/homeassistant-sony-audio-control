@@ -1,0 +1,10 @@
+[
+  {
+    "target": "",
+    "volume": 35,
+    "mute": "off",
+    "minVolume": 0,
+    "maxVolume": 70,
+    "step": 1
+  }
+]

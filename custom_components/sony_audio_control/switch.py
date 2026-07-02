@@ -7,29 +7,41 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import SonyAudioCoordinator
-from .entity import SonyAudioEntity
+from .entity_factory import create as entity_factory_create
+from .setting_entity import SonySettingEntity
 
 TRUE_VALUES = {True, "true", "on", "enabled", "active"}
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     coordinator: SonyAudioCoordinator = entry.runtime_data
-    async_add_entities([SonyAudioSwitch(coordinator, desc) for desc in coordinator.setting_descriptions if desc.kind == "switch"])
+    async_add_entities(
+        [
+            entity_factory_create(coordinator, desc)
+            for desc in coordinator.setting_descriptions
+            if desc.kind == "switch"
+        ]
+    )
 
 
-class SonyAudioSwitch(SonyAudioEntity, SwitchEntity):
+class SonyAudioSwitch(SonySettingEntity, SwitchEntity):
     """Sony boolean setting."""
 
     @property
     def is_on(self) -> bool | None:
-        data = self.coordinator.data
-        if not data:
+        state = self.coordinator.data
+        if not state:
             return None
         if self.description.key == "audio_mute":
-            return data.mute
+            return state.volume.muted if state.volume else None
         if not self.description.target:
             return None
-        value = data.sound_settings.get(self.description.target, data.speaker_settings.get(self.description.target))
+        setting = self._setting
+        if setting is None:
+            return None
+        value = setting.current_value
         return value in TRUE_VALUES or str(value).lower() in TRUE_VALUES
 
     async def async_turn_on(self, **kwargs) -> None:

@@ -11,11 +11,65 @@ from .coordinator import SonyAudioCoordinator
 from .sony.diagnostics import redact
 
 
-async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
+def _state_to_dict(state) -> dict[str, Any]:
+    """Convert SonyState into a plain dict for diagnostics."""
+    if state is None:
+        return {}
+    return {
+        "model_name": state.model_name,
+        "device_name": state.device_name,
+        "power": state.power,
+        "input_title": state.input_title,
+        "input_uri": state.input_uri,
+        "last_update": state.last_update.isoformat() if state.last_update else None,
+        "volume": {
+            "volume": state.volume.volume,
+            "muted": state.volume.muted,
+            "max_volume": state.volume.max_volume,
+            "min_volume": state.volume.min_volume,
+            "step": state.volume.step,
+        }
+        if state.volume
+        else None,
+        "system": {
+            "firmware": state.system.firmware,
+            "mac": state.system.mac,
+            "bluetooth_mac": state.system.bluetooth_mac,
+        }
+        if state.system
+        else None,
+        "speaker_settings": {
+            target: {
+                "title": s.title,
+                "type": str(s.type),
+                "current_value": s.current_value,
+                "available": s.available,
+                "minimum": s.minimum,
+                "maximum": s.maximum,
+                "step": s.step,
+            }
+            for target, s in state.speaker_settings.items()
+        },
+        "sound_settings": {
+            target: {
+                "title": s.title,
+                "type": str(s.type),
+                "current_value": s.current_value,
+                "available": s.available,
+                "minimum": s.minimum,
+                "maximum": s.maximum,
+                "step": s.step,
+            }
+            for target, s in state.sound_settings.items()
+        },
+    }
+
+
+async def async_get_config_entry_diagnostics(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
     coordinator: SonyAudioCoordinator = entry.runtime_data
-    targets = [desc.target for desc in coordinator.setting_descriptions if desc.target]
-    dump = await coordinator.client.dump_device_info([target for target in targets if target])
     return redact(
         {
             "entry": {"title": entry.title, "data": dict(entry.data)},
@@ -26,6 +80,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
                     "kind": desc.kind,
                     "service": desc.service,
                     "target": desc.target,
+                    "sony_type": desc.sony_type,
                     "get_method": desc.get_method,
                     "set_method": desc.set_method,
                     "options": desc.option_values,
@@ -37,11 +92,14 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
                 }
                 for desc in coordinator.setting_descriptions
             ],
-            "device_dump": dump,
+            "state": _state_to_dict(coordinator.data),
+            "supported_api_info": coordinator.supported_api_info,
         }
     )
 
 
-async def async_get_device_diagnostics(hass: HomeAssistant, entry: ConfigEntry, device: dr.DeviceEntry) -> dict[str, Any]:
+async def async_get_device_diagnostics(
+    hass: HomeAssistant, entry: ConfigEntry, device: dr.DeviceEntry
+) -> dict[str, Any]:
     """Return diagnostics for a device."""
     return await async_get_config_entry_diagnostics(hass, entry)

@@ -17,10 +17,16 @@ CORE_SENSORS = [
 ]
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     coordinator: SonyAudioCoordinator = entry.runtime_data
     entities = [SonyAudioSensor(coordinator, desc) for desc in CORE_SENSORS]
-    entities.extend(SonyAudioSensor(coordinator, desc) for desc in coordinator.setting_descriptions if desc.kind == "sensor" and desc.key != "media_player_main")
+    entities.extend(
+        SonyAudioSensor(coordinator, desc)
+        for desc in coordinator.setting_descriptions
+        if desc.kind == "sensor" and desc.key != "media_player_main"
+    )
     async_add_entities(entities)
 
 
@@ -29,16 +35,21 @@ class SonyAudioSensor(SonyAudioEntity, SensorEntity):
 
     @property
     def native_value(self):
-        data = self.coordinator.data
-        if not data:
+        state = self.coordinator.data
+        if not state:
             return None
         key = self.description.key
         if key == "power_status":
-            return data.power
+            return state.power
         if key == "current_input":
-            return data.input_title or data.input_uri
+            return state.input_title or state.input_uri
         if key == "model_name":
-            return data.model_name
+            return state.model_name
         if self.description.target:
-            return data.sound_settings.get(self.description.target, data.speaker_settings.get(self.description.target))
+            setting = (
+                state.speaker_settings.get(self.description.target)
+                or state.sound_settings.get(self.description.target)
+            )
+            if setting:
+                return setting.current_value
         return None
