@@ -9,6 +9,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .coordinator import SonyAudioCoordinator
 from .entity_factory import create as entity_factory_create
 from .setting_entity import SonySettingEntity
+from .sony.constants import SET_SOUND_SETTINGS, SET_SPEAKER_SETTINGS
 
 
 async def async_setup_entry(
@@ -59,8 +60,8 @@ class SonyAudioNumber(SonySettingEntity, NumberEntity):
         if not self.description.target or not self.description.set_method:
             return
         text = str(int(value)) if float(value).is_integer() else str(value)
-        if self.description.set_method == "setSpeakerSettings":
+        if self.description.set_method == SET_SPEAKER_SETTINGS:
             await self.coordinator.client.set_speaker_setting(self.description.target, text)
-        elif self.description.set_method == "setSoundSettings":
+        elif self.description.set_method == SET_SOUND_SETTINGS:
             await self.coordinator.client.set_sound_setting(self.description.target, text)
         await self.coordinator.async_request_refresh()

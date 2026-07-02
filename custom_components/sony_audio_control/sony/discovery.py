@@ -11,6 +11,20 @@ from ..const import (
     SUBWOOFER_PRESETS,
 )
 from .client import SonyAudioClient
+from .constants import (
+    GET_CURRENT_EXTERNAL_TERMINALS_STATUS,
+    GET_POWER_STATUS,
+    GET_SOUND_SETTINGS,
+    GET_SPEAKER_SETTINGS,
+    GET_VOLUME_INFORMATION,
+    SERVICE_AUDIO,
+    SERVICE_AV_CONTENT,
+    SERVICE_SYSTEM,
+    SET_AUDIO_MUTE,
+    SET_PLAY_CONTENT,
+    SET_SOUND_SETTINGS,
+    SET_SPEAKER_SETTINGS,
+)
 from .models import SettingDescription, SettingType
 
 _LOGGER = logging.getLogger(__name__)
@@ -182,10 +196,10 @@ def _classify_setting(
 
     get_method = method
     set_method = None
-    if method == "getSpeakerSettings":
-        set_method = "setSpeakerSettings"
-    elif method == "getSoundSettings":
-        set_method = "setSoundSettings"
+    if method == GET_SPEAKER_SETTINGS:
+        set_method = SET_SPEAKER_SETTINGS
+    elif method == GET_SOUND_SETTINGS:
+        set_method = SET_SOUND_SETTINGS
 
     if kind == "number":
         min_value = min_value if min_value is not None else -10
@@ -256,8 +270,8 @@ async def discover_settings(
         desc = _classify_setting(service, method, discovered_target, setting)
         descriptions[desc.key] = desc
 
-    if not methods or ("audio", "getSpeakerSettings") in methods:
-        payload = await client.try_call("audio", "getSpeakerSettings", [{}])
+    if not methods or (SERVICE_AUDIO, GET_SPEAKER_SETTINGS) in methods:
+        payload = await client.try_call(SERVICE_AUDIO, GET_SPEAKER_SETTINGS, [{}])
         settings = _extract_settings_payloads(payload)
         if settings:
             for setting in settings:
@@ -267,12 +281,12 @@ async def discover_settings(
                 if not target:
                     continue
                 desc = _classify_setting(
-                    "audio", "getSpeakerSettings", str(target), setting
+                    SERVICE_AUDIO, GET_SPEAKER_SETTINGS, str(target), setting
                 )
                 descriptions[desc.key] = desc
         else:
             for target in SPEAKER_TARGET_PROBES:
-                await probe("audio", "getSpeakerSettings", target)
+                await probe(SERVICE_AUDIO, GET_SPEAKER_SETTINGS, target)
 
     if any(
         desc.target == SUBWOOFER_LEVEL_TARGET and desc.kind == "number"
@@ -282,9 +296,9 @@ async def discover_settings(
             key=SUBWOOFER_PRESET_KEY,
             name="Subwoofer Preset",
             kind="select",
-            service="audio",
-            get_method="getSpeakerSettings",
-            set_method="setSpeakerSettings",
+            service=SERVICE_AUDIO,
+            get_method=GET_SPEAKER_SETTINGS,
+            set_method=SET_SPEAKER_SETTINGS,
             target=SUBWOOFER_LEVEL_TARGET,
             option_values=list(SUBWOOFER_PRESETS) + [SUBWOOFER_MANUAL_PRESET],
             option_map={
@@ -294,9 +308,9 @@ async def discover_settings(
             raw={"preset_for": SUBWOOFER_LEVEL_TARGET},
         )
 
-    if not methods or ("audio", "getSoundSettings") in methods:
+    if not methods or (SERVICE_AUDIO, GET_SOUND_SETTINGS) in methods:
         payload = await client.try_call(
-            "audio", "getSoundSettings", [{}], version="1.1"
+            SERVICE_AUDIO, GET_SOUND_SETTINGS, [{}], version="1.1"
         )
         settings = _extract_settings_payloads(payload)
         if settings:
@@ -307,18 +321,18 @@ async def discover_settings(
                 if not target:
                     continue
                 desc = _classify_setting(
-                    "audio", "getSoundSettings", str(target), setting
+                    SERVICE_AUDIO, GET_SOUND_SETTINGS, str(target), setting
                 )
                 descriptions[desc.key] = desc
         else:
             for target in SOUND_TARGET_PROBES + SENSOR_TARGET_PROBES:
-                await probe("audio", "getSoundSettings", target)
+                await probe(SERVICE_AUDIO, GET_SOUND_SETTINGS, target)
 
     # Core entities that are handled explicitly by platforms.
     if (
         not methods
-        or ("system", "getPowerStatus") in methods
-        or ("audio", "getVolumeInformation") in methods
+        or (SERVICE_SYSTEM, GET_POWER_STATUS) in methods
+        or (SERVICE_AUDIO, GET_VOLUME_INFORMATION) in methods
     ):
         descriptions["media_player_main"] = SettingDescription(
             key="media_player_main",
@@ -327,28 +341,28 @@ async def discover_settings(
             service="core",
             raw={},
         )
-    if not methods or ("audio", "getVolumeInformation") in methods:
+    if not methods or (SERVICE_AUDIO, GET_VOLUME_INFORMATION) in methods:
         descriptions["audio_mute"] = SettingDescription(
             key="audio_mute",
             name="Mute",
             kind="switch",
-            service="audio",
+            service=SERVICE_AUDIO,
             target="speaker",
-            get_method="getVolumeInformation",
-            set_method="setAudioMute",
+            get_method=GET_VOLUME_INFORMATION,
+            set_method=SET_AUDIO_MUTE,
             icon="mdi:volume-mute",
         )
     if (
         not methods
-        or ("avContent", "getCurrentExternalTerminalsStatus") in methods
+        or (SERVICE_AV_CONTENT, GET_CURRENT_EXTERNAL_TERMINALS_STATUS) in methods
     ):
         descriptions["input_source"] = SettingDescription(
             key="input_source",
             name="Input Source",
             kind="select",
-            service="avContent",
-            get_method="getCurrentExternalTerminalsStatus",
-            set_method="setPlayContent",
+            service=SERVICE_AV_CONTENT,
+            get_method=GET_CURRENT_EXTERNAL_TERMINALS_STATUS,
+            set_method=SET_PLAY_CONTENT,
             target="inputSource",
         )
 

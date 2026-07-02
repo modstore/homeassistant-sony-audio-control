@@ -10,6 +10,7 @@ from .const import SUBWOOFER_MANUAL_PRESET, SUBWOOFER_PRESET_KEY, SUBWOOFER_PRES
 from .coordinator import SonyAudioCoordinator
 from .entity_factory import create as entity_factory_create
 from .setting_entity import SonySettingEntity
+from .sony.constants import SET_SOUND_SETTINGS, SET_SPEAKER_SETTINGS
 
 
 async def async_setup_entry(
@@ -63,8 +64,8 @@ class SonyAudioSelect(SonySettingEntity, SelectEntity):
             # not match a preset. Selecting it should not change the receiver.
             return
         value = self.description.option_map.get(option, option)
-        if self.description.set_method == "setSpeakerSettings":
+        if self.description.set_method == SET_SPEAKER_SETTINGS:
             await self.coordinator.client.set_speaker_setting(self.description.target, value)
-        elif self.description.set_method == "setSoundSettings":
+        elif self.description.set_method == SET_SOUND_SETTINGS:
             await self.coordinator.client.set_sound_setting(self.description.target, value)
         await self.coordinator.async_request_refresh()

@@ -7,6 +7,34 @@ from typing import Any
 
 from aiohttp import ClientError, ClientSession
 
+from .constants import (
+    GET_AVAILABLE_PLAYBACK_FUNCTION,
+    GET_CURRENT_EXTERNAL_TERMINALS_STATUS,
+    GET_CUSTOM_EQUALIZER_SETTINGS,
+    GET_DEVICE_MISC_SETTINGS,
+    GET_INTERFACE_INFORMATION,
+    GET_PLAYING_CONTENT_INFO,
+    GET_POWER_SETTINGS,
+    GET_POWER_STATUS,
+    GET_SLEEP_TIMER_SETTINGS,
+    GET_SOUND_SETTINGS,
+    GET_SOURCE_LIST,
+    GET_SPEAKER_SETTINGS,
+    GET_SUPPORTED_API_INFO,
+    GET_SW_UPDATE_INFO,
+    GET_SYSTEM_INFORMATION,
+    GET_VOLUME_INFORMATION,
+    SERVICE_AUDIO,
+    SERVICE_AV_CONTENT,
+    SERVICE_GUIDE,
+    SERVICE_SYSTEM,
+    SET_AUDIO_MUTE,
+    SET_AUDIO_VOLUME,
+    SET_PLAY_CONTENT,
+    SET_POWER_STATUS,
+    SET_SOUND_SETTINGS,
+    SET_SPEAKER_SETTINGS,
+)
 from .exceptions import SonyAudioApiError, SonyAudioConnectionError
 from .models import (
     SettingType,
@@ -194,7 +222,7 @@ class SonyAudioClient:
 
     async def get_speaker_settings(self) -> dict[str, SonySetting]:
         """Fetch and parse all speaker settings."""
-        payload = await self.try_call("audio", "getSpeakerSettings", [{}])
+        payload = await self.try_call(SERVICE_AUDIO, GET_SPEAKER_SETTINGS, [{}])
         settings = _extract_settings_payloads(payload)
         return {
             str(s.get("target")): _parse_sony_setting(s)
@@ -205,7 +233,7 @@ class SonyAudioClient:
     async def get_sound_settings(self) -> dict[str, SonySetting]:
         """Fetch and parse all sound settings."""
         payload = await self.try_call(
-            "audio", "getSoundSettings", [{}], version="1.1"
+            SERVICE_AUDIO, GET_SOUND_SETTINGS, [{}], version="1.1"
         )
         settings = _extract_settings_payloads(payload)
         return {
@@ -223,7 +251,7 @@ class SonyAudioClient:
             ([{}], "1.0"),
         ):
             data = await self.try_call(
-                "audio", "getVolumeInformation", params, version=version
+                SERVICE_AUDIO, GET_VOLUME_INFORMATION, params, version=version
             )
             volumes: list[dict[str, Any]] = []
             if isinstance(data, list):
@@ -258,7 +286,7 @@ class SonyAudioClient:
     async def supported_api_info(self) -> dict[str, Any]:
         """Return supported service/method information."""
         for params in ([{}], [], [{"services": []}]):
-            data = await self.try_call("guide", "getSupportedApiInfo", params)
+            data = await self.try_call(SERVICE_GUIDE, GET_SUPPORTED_API_INFO, params)
             if data is None:
                 continue
             if isinstance(data, dict):
@@ -273,7 +301,7 @@ class SonyAudioClient:
         """Return system information where supported."""
         for version in ("1.4", "1.3", "1.0"):
             data = await self.try_call(
-                "system", "getSystemInformation", [], version=version
+                SERVICE_SYSTEM, GET_SYSTEM_INFORMATION, [], version=version
             )
             if isinstance(data, dict):
                 return data
@@ -282,7 +310,7 @@ class SonyAudioClient:
     async def power_status(self) -> dict[str, Any]:
         for version in ("1.1", "1.0"):
             data = await self.try_call(
-                "system", "getPowerStatus", [], version=version
+                SERVICE_SYSTEM, GET_POWER_STATUS, [], version=version
             )
             if isinstance(data, dict):
                 return data
@@ -290,8 +318,8 @@ class SonyAudioClient:
 
     async def set_power(self, active: bool) -> None:
         await self.call(
-            "system",
-            "setPowerStatus",
+            SERVICE_SYSTEM,
+            SET_POWER_STATUS,
             [{"status": "active" if active else "standby"}],
             version="1.1",
         )
@@ -305,7 +333,7 @@ class SonyAudioClient:
             ([{}], "1.0"),
         ):
             data = await self.try_call(
-                "audio", "getVolumeInformation", params, version=version
+                SERVICE_AUDIO, GET_VOLUME_INFORMATION, params, version=version
             )
             if isinstance(data, list):
                 return [item for item in data if isinstance(item, dict)]
@@ -315,55 +343,57 @@ class SonyAudioClient:
 
     async def set_volume(self, volume: int, *, target: str = "speaker") -> None:
         await self.call(
-            "audio",
-            "setAudioVolume",
+            SERVICE_AUDIO,
+            SET_AUDIO_VOLUME,
             [{"target": target, "volume": str(volume), "ui": "on"}],
             version="1.1",
         )
 
-    async def set_mute(self, mute: bool, *, target: str = "speaker") -> None:
+    async def set_mute(self, mute: bool) -> None:
         await self.call(
-            "audio",
-            "setAudioMute",
+            SERVICE_AUDIO,
+            SET_AUDIO_MUTE,
             [{"mute": "on" if mute else "off"}],
             version="1.1",
         )
 
     async def get_sound_setting(self, target: str) -> Any:
         return await self.call(
-            "audio", "getSoundSettings", [{"target": target}], version="1.1"
+            SERVICE_AUDIO, GET_SOUND_SETTINGS, [{"target": target}], version="1.1"
         )
 
     async def set_sound_setting(self, target: str, value: str) -> None:
         await self.call(
-            "audio",
-            "setSoundSettings",
+            SERVICE_AUDIO,
+            SET_SOUND_SETTINGS,
             [{"settings": [{"target": target, "value": value}]}],
             version="1.1",
         )
 
     async def get_speaker_setting(self, target: str) -> Any:
-        return await self.call("audio", "getSpeakerSettings", [{"target": target}])
+        return await self.call(SERVICE_AUDIO, GET_SPEAKER_SETTINGS, [{"target": target}])
 
     async def set_speaker_setting(self, target: str, value: str) -> None:
         await self.call(
-            "audio",
-            "setSpeakerSettings",
+            SERVICE_AUDIO,
+            SET_SPEAKER_SETTINGS,
             [{"settings": [{"target": target, "value": value}]}],
         )
 
     async def source_list(self) -> list[dict[str, Any]]:
-        data = await self.try_call("avContent", "getCurrentExternalTerminalsStatus")
+        data = await self.try_call(
+            SERVICE_AV_CONTENT, GET_CURRENT_EXTERNAL_TERMINALS_STATUS
+        )
         if isinstance(data, list):
             return [item for item in data if isinstance(item, dict)]
         return []
 
     async def playing_content_info(self) -> dict[str, Any]:
-        data = await self.try_call("avContent", "getPlayingContentInfo")
+        data = await self.try_call(SERVICE_AV_CONTENT, GET_PLAYING_CONTENT_INFO)
         return data if isinstance(data, dict) else {}
 
     async def set_play_content(self, uri: str) -> None:
-        await self.call("avContent", "setPlayContent", [{"uri": uri}])
+        await self.call(SERVICE_AV_CONTENT, SET_PLAY_CONTENT, [{"uri": uri}])
 
     async def dump_device_info(
         self, discovered_targets: list[str] | None = None
@@ -377,46 +407,53 @@ class SonyAudioClient:
             "power_status": await self.power_status(),
             "volume_information": await self.volume_information(),
             "speaker_settings_all": await self.try_call(
-                "audio", "getSpeakerSettings", [{}]
+                SERVICE_AUDIO, GET_SPEAKER_SETTINGS, [{}]
             ),
             "sound_settings_all": await self.try_call(
-                "audio", "getSoundSettings", [{}], version="1.1"
+                SERVICE_AUDIO, GET_SOUND_SETTINGS, [{}], version="1.1"
             ),
             "custom_equalizer_settings": await self.try_call(
-                "audio", "getCustomEqualizerSettings", [{}]
+                SERVICE_AUDIO, GET_CUSTOM_EQUALIZER_SETTINGS, [{}]
             ),
             "source_list": await self.try_call(
-                "avContent", "getSourceList", [{"scheme": "extInput"}], version="1.2"
+                SERVICE_AV_CONTENT,
+                GET_SOURCE_LIST,
+                [{"scheme": "extInput"}],
+                version="1.2",
             ),
             "current_external_terminals_status": await self.try_call(
-                "avContent", "getCurrentExternalTerminalsStatus"
+                SERVICE_AV_CONTENT, GET_CURRENT_EXTERNAL_TERMINALS_STATUS
             ),
             "playing_content_info": await self.try_call(
-                "avContent", "getPlayingContentInfo", [], version="1.2"
+                SERVICE_AV_CONTENT, GET_PLAYING_CONTENT_INFO, [], version="1.2"
             ),
             "available_playback_function": await self.try_call(
-                "avContent", "getAvailablePlaybackFunction"
+                SERVICE_AV_CONTENT, GET_AVAILABLE_PLAYBACK_FUNCTION
             ),
-            "power_settings": await self.try_call("system", "getPowerSettings", [{}]),
+            "power_settings": await self.try_call(
+                SERVICE_SYSTEM, GET_POWER_SETTINGS, [{}]
+            ),
             "sleep_timer_settings": await self.try_call(
-                "system", "getSleepTimerSettings", [{}]
+                SERVICE_SYSTEM, GET_SLEEP_TIMER_SETTINGS, [{}]
             ),
             "device_misc_settings": await self.try_call(
-                "system", "getDeviceMiscSettings", [{}]
+                SERVICE_SYSTEM, GET_DEVICE_MISC_SETTINGS, [{}]
             ),
             "interface_information": await self.try_call(
-                "system", "getInterfaceInformation"
+                SERVICE_SYSTEM, GET_INTERFACE_INFORMATION
             ),
-            "software_update_info": await self.try_call("system", "getSWUpdateInfo"),
+            "software_update_info": await self.try_call(
+                SERVICE_SYSTEM, GET_SW_UPDATE_INFO
+            ),
         }
         settings: dict[str, Any] = {}
         for target in discovered_targets or []:
             settings[target] = {
                 "sound": await self.try_call(
-                    "audio", "getSoundSettings", [{"target": target}], version="1.1"
+                    SERVICE_AUDIO, GET_SOUND_SETTINGS, [{"target": target}], version="1.1"
                 ),
                 "speaker": await self.try_call(
-                    "audio", "getSpeakerSettings", [{"target": target}]
+                    SERVICE_AUDIO, GET_SPEAKER_SETTINGS, [{"target": target}]
                 ),
             }
         dump["target_probe_results"] = settings

@@ -6,15 +6,21 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
 
+from .constants import (
+    TYPE_BOOLEAN_TARGET,
+    TYPE_DOUBLE_NUMBER_TARGET,
+    TYPE_ENUM_TARGET,
+)
+
 EntityKind = Literal["number", "select", "sensor", "switch", "button"]
 
 
 class SettingType(StrEnum):
     """Sony setting type identifiers."""
 
-    NUMBER = "doubleNumberTarget"
-    ENUM = "enumTarget"
-    BOOLEAN = "booleanTarget"
+    NUMBER = TYPE_DOUBLE_NUMBER_TARGET
+    ENUM = TYPE_ENUM_TARGET
+    BOOLEAN = TYPE_BOOLEAN_TARGET
     UNKNOWN = "unknown"
 
 
