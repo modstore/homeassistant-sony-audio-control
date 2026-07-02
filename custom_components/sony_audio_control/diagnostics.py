@@ -62,6 +62,29 @@ def _state_to_dict(state) -> dict[str, Any]:
             }
             for target, s in state.sound_settings.items()
         },
+        "sources": [
+            {"uri": s.uri, "title": s.title, "icon": s.icon} for s in state.sources
+        ],
+    }
+
+
+def _discovery_to_dict(coordinator: SonyAudioCoordinator) -> dict[str, Any]:
+    """Build a discovery summary for diagnostics."""
+    supported = coordinator.supported_api_info
+    services = []
+    if isinstance(supported, dict):
+        svc_list = supported.get("services")
+        if isinstance(svc_list, list):
+            services = [
+                str(s.get("service") or s.get("serviceName") or s.get("name"))
+                for s in svc_list
+                if isinstance(s, dict)
+            ]
+    return {
+        "supported_services": [s for s in services if s],
+        "successful_methods": sorted(coordinator.client.successful_methods),
+        "failed_methods": sorted(coordinator.client.failed_methods),
+        "sony_error_codes": coordinator.client.sony_error_codes,
     }
 
 
@@ -73,6 +96,16 @@ async def async_get_config_entry_diagnostics(
     return redact(
         {
             "entry": {"title": entry.title, "data": dict(entry.data)},
+            "device": {
+                "host": coordinator.client.host,
+                "port": coordinator.client.port,
+                "model_name": coordinator.data.model_name if coordinator.data else None,
+                "device_name": coordinator.data.device_name if coordinator.data else None,
+                "firmware": coordinator.data.system.firmware if coordinator.data and coordinator.data.system else None,
+            },
+            "discovery": _discovery_to_dict(coordinator),
+            "api_timings": list(coordinator.client.api_timings.values()),
+            "state": _state_to_dict(coordinator.data),
             "discovered_entities": [
                 {
                     "key": desc.key,
@@ -92,7 +125,6 @@ async def async_get_config_entry_diagnostics(
                 }
                 for desc in coordinator.setting_descriptions
             ],
-            "state": _state_to_dict(coordinator.data),
             "supported_api_info": coordinator.supported_api_info,
         }
     )

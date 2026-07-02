@@ -30,33 +30,30 @@ class SonyAudioEntity(CoordinatorEntity[SonyAudioCoordinator]):
         state = self.coordinator.data
         system = state.system if state else None
         system_info = system.raw if system else {}
+
         name = (
             state.device_name
-            if state
-            else system_info.get("productName")
+            or system_info.get("productName")
             or system_info.get("deviceName")
             or system_info.get("modelName")
         )
         model = (
             state.model_name
-            if state
-            else system_info.get("modelName")
+            or system_info.get("modelName")
             or system_info.get("model")
         )
-        serial = (
-            system_info.get("serial")
-            or system_info.get("serialNumber")
-            or system.mac
-            if system
-            else None
-        )
-        version = system.firmware if system else None
-        identifiers = {(DOMAIN, str(serial or self.coordinator.client.host))}
+        firmware = system.firmware if system else None
+        mac = system.mac if system else None
+
+        identifiers = {(DOMAIN, str(mac or self.coordinator.client.host))}
+        connections = {("mac", mac)} if mac else set()
+
         return DeviceInfo(
             identifiers=identifiers,
+            connections=connections,
             name=name or model or "Sony Audio Device",
             manufacturer="Sony",
             model=model,
-            sw_version=version,
+            sw_version=firmware,
             configuration_url=f"http://{self.coordinator.client.host}:{self.coordinator.client.port}",
         )

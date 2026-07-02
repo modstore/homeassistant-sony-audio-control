@@ -43,3 +43,14 @@ call_api:
       example: [{"target": "subwooferLevel"}]
       selector:
         object:
+
+reload:
+  name: Reload
+  description: Force an immediate refresh of all Sony Audio Control entities.
+  fields:
+    entry_id:
+      name: Config Entry ID
+      description: Optional config entry ID to reload a single device. If omitted, all devices are reloaded.
+      example: "01J2K3L4M5N6O7P8Q9R0S1T2U3V4W5X6"
+      selector:
+        text:

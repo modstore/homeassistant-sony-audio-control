@@ -12,6 +12,26 @@ from .entity import SonyAudioEntity
 from .sony.models import SettingDescription
 
 
+def _source_icon(title: str | None) -> str | None:
+    """Return a Home Assistant icon for common Sony source titles."""
+    if not title:
+        return None
+    title_l = title.lower()
+    if "tv" in title_l:
+        return "mdi:television"
+    if "bluetooth" in title_l:
+        return "mdi:bluetooth"
+    if "usb" in title_l:
+        return "mdi:usb"
+    if "hdmi" in title_l:
+        return "mdi:video-input-hdmi"
+    if "network" in title_l or "net" in title_l:
+        return "mdi:lan"
+    if "spotify" in title_l:
+        return "mdi:spotify"
+    return None
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -38,6 +58,10 @@ class SonyAudioMediaPlayer(SonyAudioEntity, MediaPlayerEntity):
                 key="media_player_main", name="Receiver", kind="sensor", service="core"
             ),
         )
+
+    @property
+    def icon(self) -> str | None:
+        return _source_icon(self.source) or "mdi:audio-video"
 
     @property
     def state(self) -> MediaPlayerState | None:
@@ -71,7 +95,15 @@ class SonyAudioMediaPlayer(SonyAudioEntity, MediaPlayerEntity):
 
     @property
     def source_list(self) -> list[str] | None:
-        return getattr(self, "_source_titles", None)
+        state = self.coordinator.data
+        if not state or not state.sources:
+            return None
+        titles = [s.title for s in state.sources]
+        # If the current source is not in the list, append it so the UI can display it
+        current = self.source
+        if current and current not in titles:
+            titles.append(current)
+        return titles
 
     async def async_turn_on(self) -> None:
         await self.coordinator.client.set_power(True)
@@ -92,3 +124,12 @@ class SonyAudioMediaPlayer(SonyAudioEntity, MediaPlayerEntity):
     async def async_mute_volume(self, mute: bool) -> None:
         await self.coordinator.client.set_mute(mute)
         await self.coordinator.async_request_refresh()
+
+    async def async_select_source(self, source: str) -> None:
+        state = self.coordinator.data
+        if not state or not state.sources:
+            return
+        matched = next((s for s in state.sources if s.title == source), None)
+        if matched:
+            await self.coordinator.client.set_play_content(matched.uri)
+            await self.coordinator.async_request_refresh()

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 from aiohttp import ClientError, ClientSession
@@ -162,15 +163,19 @@ class SonyAudioClient:
         self.timeout = timeout
         self.base_url = f"http://{host}:{port}/sony"
         self._request_id = 1
+        self.api_timings: dict[str, dict[str, Any]] = {}
+        self.successful_methods: set[str] = set()
+        self.failed_methods: set[str] = set()
+        self.sony_error_codes: list[dict[str, Any]] = []
 
-    async def call(
+    async def _execute_call(
         self,
         service: str,
         method: str,
         params: list[Any] | None = None,
         version: str = "1.0",
     ) -> Any:
-        """Call a Sony API method and return the first result object when available."""
+        """Execute the HTTP request without timing or tracking."""
         self._request_id += 1
         payload = {
             "method": method,
@@ -202,6 +207,31 @@ class SonyAudioClient:
             return result
         return result
 
+    async def call(
+        self,
+        service: str,
+        method: str,
+        params: list[Any] | None = None,
+        version: str = "1.0",
+    ) -> Any:
+        """Call a Sony API method and return the first result object when available."""
+        start = time.perf_counter()
+        try:
+            result = await self._execute_call(service, method, params, version)
+            self.successful_methods.add(method)
+            return result
+        except SonyAudioApiError as err:
+            self.failed_methods.add(method)
+            if isinstance(getattr(err, "error", None), list):
+                self.sony_error_codes.append({"method": method, "error": err.error})
+            raise
+        except SonyAudioConnectionError:
+            self.failed_methods.add(method)
+            raise
+        finally:
+            duration_ms = (time.perf_counter() - start) * 1000
+            self.api_timings[method] = {"method": method, "duration_ms": round(duration_ms)}
+
     async def try_call(
         self,
         service: str,
@@ -212,9 +242,9 @@ class SonyAudioClient:
         """Call an API method, returning None on unsupported/unavailable methods."""
         try:
             return await self.call(service, method, params, version)
-        except SonyAudioApiError as err:
+        except (SonyAudioApiError, SonyAudioConnectionError):
             _LOGGER.debug(
-                "Sony API method unavailable: %s/%s (%s)", service, method, err
+                "Sony API method unavailable: %s/%s", service, method
             )
             return None
 
@@ -280,6 +310,18 @@ class SonyAudioClient:
             bluetooth_mac=data.get("bdAddr"),
             raw=data,
         )
+
+    async def get_av_sources(self) -> list[dict[str, Any]]:
+        """Fetch the full discovered source list from avContent."""
+        data = await self.try_call(
+            SERVICE_AV_CONTENT,
+            GET_SOURCE_LIST,
+            [{"scheme": "extInput"}],
+            version="1.2",
+        )
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+        return []
 
     # -- Existing helpers (kept for backward compat) --------------------------
 

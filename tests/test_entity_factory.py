@@ -66,7 +66,10 @@ class _MockCoordinatorEntity(metaclass=_Subscriptable):
 
 
 class _MockDataUpdateCoordinator(metaclass=_Subscriptable):
-    pass
+    def __init__(self, hass, logger, name=None, update_interval=None, update_method=None, request_refresh_debouncer=None):
+        self.hass = hass
+        self.name = name
+        self.update_interval = update_interval
 
 
 _ha_helpers_update_coordinator = ModuleType("homeassistant.helpers.update_coordinator")

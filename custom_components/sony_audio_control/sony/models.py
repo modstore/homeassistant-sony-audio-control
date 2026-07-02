@@ -62,6 +62,15 @@ class SonySystem:
 
 
 @dataclass
+class SonySource:
+    """A single audio source discovered from a Sony device."""
+
+    uri: str
+    title: str
+    icon: str | None = None
+
+
+@dataclass
 class SonyState:
     """Complete cached state of a Sony audio device."""
 
@@ -74,6 +83,7 @@ class SonyState:
     input_title: str | None = None
     model_name: str | None = None
     device_name: str | None = None
+    sources: list[SonySource] = field(default_factory=list)
     last_update: datetime | None = None
 
 

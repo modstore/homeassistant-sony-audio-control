@@ -14,6 +14,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     ATTR_ENDPOINT,
+    ATTR_ENTRY_ID,
     ATTR_METHOD,
     ATTR_PARAMS,
     CONF_HOST,
@@ -22,6 +23,7 @@ from .const import (
     PLATFORMS,
     SERVICE_CALL_API,
     SERVICE_DUMP_DEVICE_INFO,
+    SERVICE_RELOAD,
 )
 from .coordinator import SonyAudioCoordinator
 from .sony.client import SonyAudioClient
@@ -105,6 +107,27 @@ def _async_register_services(hass: HomeAssistant) -> None:
         result = await coordinator.client.call(endpoint, method, params)
         _LOGGER.info("Sony Audio Control API result for %s/%s: %s", endpoint, method, result)
 
+    async def async_reload(call: ServiceCall) -> None:
+        entry_id = call.data.get(ATTR_ENTRY_ID)
+        entries = hass.config_entries.async_entries(DOMAIN)
+        matched = [
+            entry
+            for entry in entries
+            if getattr(entry, "runtime_data", None) is not None
+            and (not entry_id or entry.entry_id == entry_id)
+        ]
+        if entry_id and not matched:
+            _LOGGER.warning(
+                "No Sony Audio Control config entry found for entry_id %s", entry_id
+            )
+            return
+        for entry in matched:
+            coordinator: SonyAudioCoordinator = entry.runtime_data
+            await coordinator.async_request_refresh()
+            _LOGGER.debug(
+                "Sony Audio Control reload triggered for %s", coordinator.client.host
+            )
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_DUMP_DEVICE_INFO,
@@ -123,6 +146,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
                 vol.Optional(ATTR_PARAMS, default=[]): list,
             }
         ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RELOAD,
+        async_reload,
+        schema=vol.Schema({vol.Optional(ATTR_ENTRY_ID): cv.string}),
     )
 
 
